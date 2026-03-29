@@ -1,5 +1,6 @@
 """MongoDB connection and Beanie initialization using Motor async client."""
 
+import certifi
 import structlog
 from beanie import init_beanie
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
@@ -21,7 +22,7 @@ async def init_db() -> None:
 
     settings = get_settings()
 
-    _client = AsyncIOMotorClient(settings.MONGODB_URI)
+    _client = AsyncIOMotorClient(settings.MONGODB_URI, tlsCAFile=certifi.where())
 
     # Extract database name from URI or use configured name
     _database = _client[settings.MONGODB_DB_NAME]

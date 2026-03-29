@@ -1,35 +1,32 @@
 """JWT token creation/verification and password hashing utilities."""
 
 from datetime import UTC, datetime, timedelta
-from uuid import UUID
 
+import bcrypt
 import structlog
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 from app.config import get_settings
 
 logger = structlog.get_logger()
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 ALGORITHM = "HS256"
 
 
 def hash_password(password: str) -> str:
     """Hash a plaintext password using bcrypt."""
-    return pwd_context.hash(password)
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a plaintext password against a bcrypt hash."""
-    return pwd_context.verify(plain_password, hashed_password)
+    return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
 
 
 def create_access_token(
-    user_id: UUID,
+    user_id: str,
     email: str,
-    org_id: UUID | None = None,
+    org_id: str | None = None,
     expires_delta: timedelta | None = None,
 ) -> str:
     """Create a short-lived JWT access token (default 15 minutes)."""
@@ -50,7 +47,7 @@ def create_access_token(
 
 
 def create_refresh_token(
-    user_id: UUID,
+    user_id: str,
     expires_delta: timedelta | None = None,
 ) -> str:
     """Create a long-lived JWT refresh token (default 7 days)."""

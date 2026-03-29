@@ -3,16 +3,14 @@ from datetime import datetime, timedelta, timezone
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from jose import jwt
-from passlib.context import CryptContext
-
 from app.config import get_settings
 from app.dependencies import get_current_user
 from app.models.user import User
 from app.schemas.user import TokenResponse, UserCreate, UserLogin, UserResponse
+from app.utils.security import hash_password, verify_password
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/auth", tags=["auth"])
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def create_access_token(user_id: str, expires_minutes: int) -> str:
@@ -41,7 +39,7 @@ async def register(data: UserCreate) -> User:
     user = User(
         email=data.email,
         name=data.name,
-        password_hash=pwd_context.hash(data.password),
+        password_hash=hash_password(data.password),
     )
     await user.insert()
     logger.info("user_registered", user_id=str(user.id), email=user.email)
@@ -52,7 +50,7 @@ async def register(data: UserCreate) -> User:
 async def login(data: UserLogin) -> dict[str, str]:
     user = await User.find_one(User.email == data.email)
 
-    if user is None or not pwd_context.verify(data.password, user.password_hash):
+    if user is None or not verify_password(data.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",

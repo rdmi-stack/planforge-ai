@@ -1,6 +1,6 @@
 """Organization and OrgMember document models."""
 
-import uuid
+
 
 from beanie import Document, Indexed
 from pydantic import Field
@@ -9,9 +9,9 @@ from app.models.base import TimestampMixin
 
 
 class OrgMember(TimestampMixin, Document):
-    id: uuid.UUID = Field(default_factory=uuid.uuid4)
-    org_id: uuid.UUID
-    user_id: uuid.UUID
+    id: str = Field(default_factory=lambda: __import__("uuid").uuid4().hex)
+    org_id: str
+    user_id: str
     role: str = "member"
 
     class Settings:
@@ -19,7 +19,7 @@ class OrgMember(TimestampMixin, Document):
 
 
 class Organization(TimestampMixin, Document):
-    id: uuid.UUID = Field(default_factory=uuid.uuid4)
+    id: str = Field(default_factory=lambda: __import__("uuid").uuid4().hex)
     name: str
     slug: Indexed(str, unique=True)  # type: ignore[valid-type]
     plan: str = "free"

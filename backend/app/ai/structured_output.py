@@ -4,8 +4,8 @@ Ensures AI responses are parsed into validated Pydantic models,
 providing type safety and automatic retry on parse failures.
 """
 
-import anthropic
 import instructor
+import openai
 import structlog
 from pydantic import BaseModel
 
@@ -18,44 +18,42 @@ logger = structlog.get_logger()
 class StructuredAIClient:
     """AI client that returns validated Pydantic model instances.
 
-    Uses the instructor library to patch Anthropic/OpenAI clients
+    Uses the instructor library to patch OpenAI client
     with structured output capabilities. Retries up to 3 times
     on validation failures.
     """
 
     def __init__(self) -> None:
         settings = get_settings()
-        self._anthropic_raw = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
-        self._client = instructor.from_anthropic(self._anthropic_raw)
+        self._openai_raw = openai.AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+        self._client = instructor.from_openai(self._openai_raw)
 
-    async def generate[T: BaseModel](
+    async def generate(
         self,
-        response_model: type[T],
+        response_model: type,
         system_prompt: str,
         user_prompt: str,
         model_tier: ModelTier = ModelTier.CHAT,
         temperature: float = 0.3,
         max_tokens: int = 4096,
         max_retries: int = 3,
-    ) -> T:
-        """Generate a structured response matching the given Pydantic model.
-
-        The instructor library handles prompt injection for the schema,
-        parsing, and automatic retries on validation failure.
-        """
+    ) -> BaseModel:
+        """Generate a structured response matching the given Pydantic model."""
         logger.info(
             "structured_generation_start",
             model=model_tier.value,
             response_type=response_model.__name__,
         )
 
-        result = await self._client.messages.create(
+        result = await self._client.chat.completions.create(
             model=model_tier.value,
             max_tokens=max_tokens,
             temperature=temperature,
             max_retries=max_retries,
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_prompt}],
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
             response_model=response_model,
         )
 
@@ -65,19 +63,16 @@ class StructuredAIClient:
         )
         return result
 
-    async def generate_list[T: BaseModel](
+    async def generate_list(
         self,
-        response_model: type[T],
+        response_model: type,
         system_prompt: str,
         user_prompt: str,
         model_tier: ModelTier = ModelTier.CHAT,
         temperature: float = 0.3,
         max_tokens: int = 4096,
-    ) -> list[T]:
-        """Generate a list of structured responses.
-
-        Wraps the target model in a list container for batch extraction.
-        """
+    ) -> list:
+        """Generate a list of structured responses."""
 
         class ListWrapper(BaseModel):
             items: list[response_model]  # type: ignore[valid-type]
