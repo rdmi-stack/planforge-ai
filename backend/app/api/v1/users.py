@@ -1,9 +1,8 @@
 """User profile endpoints."""
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.dependencies import get_current_user, get_db
+from app.dependencies import get_current_user
 from app.models.user import User
 from app.schemas.user import UserResponse, UserUpdate
 
@@ -22,7 +21,6 @@ async def get_current_user_profile(
 async def update_current_user_profile(
     data: UserUpdate,
     user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
 ) -> User:
     """Update the authenticated user's profile fields."""
     update_data = data.model_dump(exclude_unset=True)
@@ -35,6 +33,5 @@ async def update_current_user_profile(
     for field, value in update_data.items():
         setattr(user, field, value)
 
-    await db.commit()
-    await db.refresh(user)
+    await user.save()
     return user

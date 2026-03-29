@@ -1,3 +1,5 @@
+import { getSession } from "next-auth/react"
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
 
 export class ApiError extends Error {
@@ -9,6 +11,15 @@ export class ApiError extends Error {
     super(detail)
     this.name = "ApiError"
   }
+}
+
+/**
+ * Retrieves the backend JWT token from the current NextAuth session.
+ * Returns undefined if there is no active session.
+ */
+export async function getAuthToken(): Promise<string | undefined> {
+  const session = await getSession()
+  return (session as { backendToken?: string } | null)?.backendToken ?? undefined
 }
 
 export async function apiClient<T>(
@@ -36,6 +47,18 @@ export async function apiClient<T>(
 
   if (res.status === 204) return undefined as T
   return res.json()
+}
+
+/**
+ * Authenticated API client that automatically reads the backend JWT
+ * from the NextAuth session and attaches it as a Bearer token.
+ */
+export async function apiClientAuth<T>(
+  path: string,
+  options?: RequestInit
+): Promise<T> {
+  const token = await getAuthToken()
+  return apiClient<T>(path, { ...options, token })
 }
 
 export function apiGet<T>(path: string, token?: string) {

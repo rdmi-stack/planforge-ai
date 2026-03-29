@@ -1,19 +1,19 @@
+"""ChatSession document model."""
+
 import uuid
 
-from sqlalchemy import ForeignKey, String
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from beanie import Document, Indexed
+from pydantic import Field
 
-from app.models.base import Base
+from app.models.base import TimestampMixin
 
 
-class ChatSession(Base):
-    __tablename__ = "chat_sessions"
+class ChatSession(TimestampMixin, Document):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4)
+    project_id: Indexed(uuid.UUID)  # type: ignore[valid-type]
+    user_id: Indexed(uuid.UUID)  # type: ignore[valid-type]
+    messages_json: dict | None = None
+    session_type: str = "planning"
 
-    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id"))
-    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
-    messages_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
-    session_type: Mapped[str] = mapped_column(String(50), default="planning")
-
-    project: Mapped["Project"] = relationship(back_populates="chat_sessions")
-    user: Mapped["User"] = relationship(back_populates="chat_sessions")
+    class Settings:
+        name = "chat_sessions"

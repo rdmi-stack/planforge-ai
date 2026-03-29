@@ -6,8 +6,6 @@ from uuid import UUID
 import structlog
 from jinja2 import Environment, FileSystemLoader
 from pydantic import BaseModel, Field
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.client import ModelTier
 from app.ai.structured_output import StructuredAIClient
@@ -41,14 +39,9 @@ class PrioritizationResult(BaseModel):
 
 
 class Prioritizer:
-    """Scores and ranks features using configurable prioritization frameworks.
+    """Scores and ranks features using configurable prioritization frameworks."""
 
-    Supports ICE (Impact/Confidence/Ease), RICE (Reach/Impact/Confidence/Effort),
-    and MoSCoW (Must/Should/Could/Won't) classification methods.
-    """
-
-    def __init__(self, db: AsyncSession) -> None:
-        self.db = db
+    def __init__(self) -> None:
         self.structured_client = StructuredAIClient()
         self.jinja_env = Environment(
             loader=FileSystemLoader(str(PROMPTS_DIR)),
@@ -60,11 +53,7 @@ class Prioritizer:
         project_id: UUID,
         framework: str = "ICE",
     ) -> PrioritizationResult:
-        """Run AI-powered prioritization on all features in a project.
-
-        Generates scores, rankings, and MVP recommendations.
-        Updates feature priority_score and mvp_classification in the database.
-        """
+        """Run AI-powered prioritization on all features in a project."""
         if framework not in ("ICE", "RICE", "MoSCoW"):
             raise ValueError(f"Unsupported framework: {framework}. Use ICE, RICE, or MoSCoW.")
 
@@ -112,8 +101,7 @@ class Prioritizer:
                 db_feature.priority_score = int(pf.overall_score)
                 if pf.mvp_included:
                     db_feature.mvp_classification = "must_have"
-
-        await self.db.commit()
+                await db_feature.save()
 
         logger.info(
             "prioritization_complete",
@@ -124,16 +112,10 @@ class Prioritizer:
         return result
 
     async def _get_project(self, project_id: UUID) -> Project:
-        result = await self.db.execute(select(Project).where(Project.id == project_id))
-        project = result.scalar_one_or_none()
+        project = await Project.find_one(Project.id == project_id)
         if not project:
             raise ValueError(f"Project {project_id} not found")
         return project
 
     async def _get_features(self, project_id: UUID) -> list[Feature]:
-        result = await self.db.execute(
-            select(Feature)
-            .where(Feature.project_id == project_id)
-            .order_by(Feature.sort_order)
-        )
-        return list(result.scalars().all())
+        return await Feature.find(Feature.project_id == project_id).sort(+Feature.sort_order).to_list()

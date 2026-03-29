@@ -6,8 +6,6 @@ from uuid import UUID
 import structlog
 from jinja2 import Environment, FileSystemLoader
 from pydantic import BaseModel, Field
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.client import ModelTier
 from app.ai.structured_output import StructuredAIClient
@@ -39,15 +37,9 @@ class TaskList(BaseModel):
 
 
 class TaskGenerator:
-    """Generates atomic, agent-ready development tasks from features.
+    """Generates atomic, agent-ready development tasks from features."""
 
-    Each task includes a detailed coding agent prompt with full context,
-    acceptance criteria, and implementation guidance that can be dispatched
-    directly to AI coding agents like Claude Code, Cursor, or Codex.
-    """
-
-    def __init__(self, db: AsyncSession) -> None:
-        self.db = db
+    def __init__(self) -> None:
         self.structured_client = StructuredAIClient()
         self.jinja_env = Environment(
             loader=FileSystemLoader(str(PROMPTS_DIR)),
@@ -60,10 +52,7 @@ class TaskGenerator:
         feature_id: UUID,
         codebase_context: str | None = None,
     ) -> list[Task]:
-        """Generate implementation tasks for a feature and persist them.
-
-        Returns the list of created Task ORM instances in execution order.
-        """
+        """Generate implementation tasks for a feature and persist them."""
         project = await self._get_project(project_id)
         feature = await self._get_feature(feature_id)
 
@@ -73,7 +62,7 @@ class TaskGenerator:
             tech_stack=project.tech_stack_json or "Not specified",
             feature_title=feature.title,
             feature_description=feature.description,
-            user_stories=[],  # Could be enriched from feature metadata
+            user_stories=[],
             acceptance_criteria=[],
             codebase_context=codebase_context,
         )
@@ -99,14 +88,13 @@ class TaskGenerator:
         )
 
         # Determine starting sequence order
-        existing_result = await self.db.execute(
-            select(Task)
-            .where(Task.project_id == project_id)
-            .order_by(Task.sequence_order.desc())
+        last_tasks = (
+            await Task.find(Task.project_id == project_id)
+            .sort(-Task.sequence_order)
             .limit(1)
+            .to_list()
         )
-        last_task = existing_result.scalar_one_or_none()
-        start_order = (last_task.sequence_order + 1) if last_task else 0
+        start_order = (last_tasks[0].sequence_order + 1) if last_tasks else 0
 
         # Persist tasks
         created_tasks: list[Task] = []
@@ -124,12 +112,8 @@ class TaskGenerator:
                 estimated_minutes=gt.estimated_minutes,
                 agent_type=gt.agent_type,
             )
-            self.db.add(task)
+            await task.insert()
             created_tasks.append(task)
-
-        await self.db.commit()
-        for task in created_tasks:
-            await self.db.refresh(task)
 
         logger.info(
             "task_generation_complete",
@@ -145,8 +129,7 @@ class TaskGenerator:
         additional_context: str | None = None,
     ) -> str:
         """Regenerate the coding agent prompt for an existing task with optional new context."""
-        result = await self.db.execute(select(Task).where(Task.id == task_id))
-        task = result.scalar_one_or_none()
+        task = await Task.find_one(Task.id == task_id)
         if not task:
             raise ValueError(f"Task {task_id} not found")
 
@@ -174,19 +157,17 @@ class TaskGenerator:
         )
 
         task.prompt_text = new_prompt
-        await self.db.commit()
+        await task.save()
         return new_prompt
 
     async def _get_project(self, project_id: UUID) -> Project:
-        result = await self.db.execute(select(Project).where(Project.id == project_id))
-        project = result.scalar_one_or_none()
+        project = await Project.find_one(Project.id == project_id)
         if not project:
             raise ValueError(f"Project {project_id} not found")
         return project
 
     async def _get_feature(self, feature_id: UUID) -> Feature:
-        result = await self.db.execute(select(Feature).where(Feature.id == feature_id))
-        feature = result.scalar_one_or_none()
+        feature = await Feature.find_one(Feature.id == feature_id)
         if not feature:
             raise ValueError(f"Feature {feature_id} not found")
         return feature

@@ -5,8 +5,6 @@ from uuid import UUID
 
 import structlog
 from jinja2 import Environment, FileSystemLoader
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.client import AIClient, ModelTier
 from app.models.feature import Feature
@@ -21,13 +19,9 @@ PROMPTS_DIR = Path(__file__).parent.parent / "ai" / "prompts"
 class ArchitectureEngine:
     """Generates technical architecture documents including system design,
     database schemas, API contracts, and infrastructure recommendations.
-
-    Uses project specs and features as input to produce comprehensive
-    architecture artifacts tailored to the project's tech stack.
     """
 
-    def __init__(self, db: AsyncSession) -> None:
-        self.db = db
+    def __init__(self) -> None:
         self.ai_client = AIClient()
         self.jinja_env = Environment(
             loader=FileSystemLoader(str(PROMPTS_DIR)),
@@ -39,37 +33,28 @@ class ArchitectureEngine:
         project_id: UUID,
         codebase_context: str | None = None,
     ) -> dict:
-        """Generate a full architecture document for the project.
-
-        Returns a dict with keys: system_design, database_schema,
-        api_contract, infrastructure, security.
-        """
+        """Generate a full architecture document for the project."""
         project = await self._get_project(project_id)
 
         # Load spec
-        spec_result = await self.db.execute(
-            select(Spec)
-            .where(Spec.project_id == project_id)
-            .order_by(Spec.version.desc())
+        spec = (
+            await Spec.find(Spec.project_id == project_id)
+            .sort(-Spec.version)
             .limit(1)
+            .to_list()
         )
-        spec = spec_result.scalar_one_or_none()
-        spec_summary = spec.content_json.get("markdown", "") if spec else "No specification available"
+        spec_obj = spec[0] if spec else None
+        spec_summary = spec_obj.content_json.get("markdown", "") if spec_obj else "No specification available"
 
         # Load features
-        features_result = await self.db.execute(
-            select(Feature)
-            .where(Feature.project_id == project_id)
-            .order_by(Feature.sort_order)
-        )
-        features = list(features_result.scalars().all())
+        features = await Feature.find(Feature.project_id == project_id).sort(+Feature.sort_order).to_list()
 
         template = self.jinja_env.get_template("architecture.j2")
         prompt = template.render(
             project_name=project.name,
             project_description=project.description or "",
             tech_stack=project.tech_stack_json or "Not specified",
-            spec_summary=spec_summary[:4000],  # Truncate for token limits
+            spec_summary=spec_summary[:4000],
             features=[
                 {"title": f.title, "description": f.description or ""}
                 for f in features
@@ -122,8 +107,7 @@ class ArchitectureEngine:
         return sections
 
     async def _get_project(self, project_id: UUID) -> Project:
-        result = await self.db.execute(select(Project).where(Project.id == project_id))
-        project = result.scalar_one_or_none()
+        project = await Project.find_one(Project.id == project_id)
         if not project:
             raise ValueError(f"Project {project_id} not found")
         return project

@@ -4,8 +4,6 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 import structlog
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.agent_run import AgentRun
 from app.models.task import Task
@@ -16,27 +14,15 @@ MAX_RETRIES = 3
 
 
 class AgentOrchestrator:
-    """Manages the lifecycle of AI coding agent dispatches.
-
-    Handles dispatching tasks to coding agents (Claude Code, Cursor, Codex),
-    monitoring their progress, validating outputs, and retrying on failure.
-    Supports sequential and parallel dispatch strategies.
-    """
-
-    def __init__(self, db: AsyncSession) -> None:
-        self.db = db
+    """Manages the lifecycle of AI coding agent dispatches."""
 
     async def dispatch_task(
         self,
         task_id: UUID,
         agent_type: str | None = None,
     ) -> AgentRun:
-        """Dispatch a task to a coding agent and create an AgentRun record.
-
-        If agent_type is not specified, uses the task's recommended agent_type.
-        """
-        result = await self.db.execute(select(Task).where(Task.id == task_id))
-        task = result.scalar_one_or_none()
+        """Dispatch a task to a coding agent and create an AgentRun record."""
+        task = await Task.find_one(Task.id == task_id)
         if not task:
             raise ValueError(f"Task {task_id} not found")
 
@@ -56,14 +42,12 @@ class AgentOrchestrator:
             validation_result=None,
             retry_count=0,
         )
-        self.db.add(agent_run)
+        await agent_run.insert()
 
         # Update task status
         task.status = "dispatched"
         task.agent_run_id = agent_run.id
-
-        await self.db.commit()
-        await self.db.refresh(agent_run)
+        await task.save()
 
         logger.info(
             "task_dispatched",
@@ -78,10 +62,7 @@ class AgentOrchestrator:
         task_ids: list[UUID],
         agent_type: str | None = None,
     ) -> list[AgentRun]:
-        """Dispatch multiple tasks to coding agents.
-
-        Tasks are dispatched in sequence order. Returns all created AgentRun records.
-        """
+        """Dispatch multiple tasks to coding agents."""
         runs: list[AgentRun] = []
         for task_id in task_ids:
             try:
@@ -98,14 +79,8 @@ class AgentOrchestrator:
         output_log: str | None = None,
         validation_result: dict | None = None,
     ) -> AgentRun:
-        """Update the status of an agent run.
-
-        Valid status transitions: queued -> running -> completed/failed
-        """
-        result = await self.db.execute(
-            select(AgentRun).where(AgentRun.id == agent_run_id)
-        )
-        agent_run = result.scalar_one_or_none()
+        """Update the status of an agent run."""
+        agent_run = await AgentRun.find_one(AgentRun.id == agent_run_id)
         if not agent_run:
             raise ValueError(f"AgentRun {agent_run_id} not found")
 
@@ -120,11 +95,10 @@ class AgentOrchestrator:
         elif status in ("completed", "failed"):
             agent_run.completed_at = datetime.now(UTC)
 
+        await agent_run.save()
+
         # Update associated task status
-        task_result = await self.db.execute(
-            select(Task).where(Task.id == agent_run.task_id)
-        )
-        task = task_result.scalar_one_or_none()
+        task = await Task.find_one(Task.id == agent_run.task_id)
         if task:
             if status == "completed":
                 task.status = "done"
@@ -132,9 +106,7 @@ class AgentOrchestrator:
                 task.status = "failed"
             elif status == "running":
                 task.status = "in_progress"
-
-        await self.db.commit()
-        await self.db.refresh(agent_run)
+            await task.save()
 
         logger.info(
             "agent_run_status_updated",
@@ -145,10 +117,7 @@ class AgentOrchestrator:
 
     async def retry_failed_run(self, agent_run_id: UUID) -> AgentRun:
         """Retry a failed agent run if within the retry limit."""
-        result = await self.db.execute(
-            select(AgentRun).where(AgentRun.id == agent_run_id)
-        )
-        agent_run = result.scalar_one_or_none()
+        agent_run = await AgentRun.find_one(AgentRun.id == agent_run_id)
         if not agent_run:
             raise ValueError(f"AgentRun {agent_run_id} not found")
 
@@ -165,19 +134,14 @@ class AgentOrchestrator:
             status="queued",
             retry_count=agent_run.retry_count + 1,
         )
-        self.db.add(new_run)
+        await new_run.insert()
 
         # Update task reference
-        task_result = await self.db.execute(
-            select(Task).where(Task.id == agent_run.task_id)
-        )
-        task = task_result.scalar_one_or_none()
+        task = await Task.find_one(Task.id == agent_run.task_id)
         if task:
             task.status = "dispatched"
             task.agent_run_id = new_run.id
-
-        await self.db.commit()
-        await self.db.refresh(new_run)
+            await task.save()
 
         logger.info(
             "agent_run_retried",
@@ -189,10 +153,7 @@ class AgentOrchestrator:
 
     async def get_run_status(self, agent_run_id: UUID) -> AgentRun:
         """Get current status of an agent run."""
-        result = await self.db.execute(
-            select(AgentRun).where(AgentRun.id == agent_run_id)
-        )
-        agent_run = result.scalar_one_or_none()
+        agent_run = await AgentRun.find_one(AgentRun.id == agent_run_id)
         if not agent_run:
             raise ValueError(f"AgentRun {agent_run_id} not found")
         return agent_run
@@ -203,14 +164,18 @@ class AgentOrchestrator:
         status_filter: str | None = None,
     ) -> list[AgentRun]:
         """Get all agent runs for tasks in a project."""
-        query = (
-            select(AgentRun)
-            .join(Task, Task.id == AgentRun.task_id)
-            .where(Task.project_id == project_id)
-            .order_by(AgentRun.created_at.desc())
-        )
-        if status_filter:
-            query = query.where(AgentRun.status == status_filter)
+        # Get all task IDs for the project
+        tasks = await Task.find(Task.project_id == project_id).to_list()
+        task_ids = [t.id for t in tasks]
 
-        result = await self.db.execute(query)
-        return list(result.scalars().all())
+        if not task_ids:
+            return []
+
+        query = AgentRun.find(AgentRun.task_id.is_in(task_ids))  # type: ignore[attr-defined]
+        if status_filter:
+            query = AgentRun.find(
+                AgentRun.task_id.is_in(task_ids),  # type: ignore[attr-defined]
+                AgentRun.status == status_filter,
+            )
+
+        return await query.sort(-AgentRun.created_at).to_list()

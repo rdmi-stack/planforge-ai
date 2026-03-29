@@ -1,20 +1,20 @@
+"""SpecVersion document model."""
+
 import uuid
 
-from sqlalchemy import ForeignKey, Integer
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from beanie import Document, Indexed
+from pydantic import Field
 
-from app.models.base import Base
+from app.models.base import TimestampMixin
 
 
-class SpecVersion(Base):
-    __tablename__ = "spec_versions"
+class SpecVersion(TimestampMixin, Document):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4)
+    spec_id: Indexed(uuid.UUID)  # type: ignore[valid-type]
+    version_number: int
+    content_json: dict | None = None
+    diff_json: dict | None = None
+    created_by: uuid.UUID | None = None
 
-    spec_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("specs.id"))
-    version_number: Mapped[int] = mapped_column(Integer)
-    content_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
-    diff_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
-    created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
-
-    spec: Mapped["Spec"] = relationship(back_populates="versions")
-    author: Mapped["User"] = relationship()
+    class Settings:
+        name = "spec_versions"

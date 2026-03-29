@@ -1,9 +1,7 @@
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.dependencies import get_current_user, get_db
+from app.dependencies import get_current_user
 from app.models.project import Project
 from app.models.spec import Spec
 from app.models.spec_version import SpecVersion
@@ -14,13 +12,10 @@ logger = structlog.get_logger()
 router = APIRouter(prefix="/projects/{project_id}/specs", tags=["specs"])
 
 
-async def _get_user_project(
-    project_id: str, user: User, db: AsyncSession
-) -> Project:
-    result = await db.execute(
-        select(Project).where(Project.id == project_id, Project.owner_id == user.id)
+async def _get_user_project(project_id: str, user: User) -> Project:
+    project = await Project.find_one(
+        Project.id == project_id, Project.owner_id == user.id
     )
-    project = result.scalar_one_or_none()
     if project is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     return project
@@ -30,13 +25,14 @@ async def _get_user_project(
 async def list_specs(
     project_id: str,
     user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
 ) -> list[Spec]:
-    await _get_user_project(project_id, user, db)
-    result = await db.execute(
-        select(Spec).where(Spec.project_id == project_id).order_by(Spec.created_at.desc())
+    await _get_user_project(project_id, user)
+    specs = (
+        await Spec.find(Spec.project_id == project_id)
+        .sort(-Spec.created_at)
+        .to_list()
     )
-    return list(result.scalars().all())
+    return specs
 
 
 @router.post("/", response_model=SpecResponse, status_code=status.HTTP_201_CREATED)
@@ -44,9 +40,8 @@ async def create_spec(
     project_id: str,
     data: SpecCreate,
     user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
 ) -> Spec:
-    await _get_user_project(project_id, user, db)
+    await _get_user_project(project_id, user)
 
     spec = Spec(
         project_id=project_id,
@@ -54,9 +49,7 @@ async def create_spec(
         content_json=data.content_json,
         parent_spec_id=data.parent_spec_id,
     )
-    db.add(spec)
-    await db.flush()
-    await db.refresh(spec)
+    await spec.insert()
 
     version = SpecVersion(
         spec_id=spec.id,
@@ -64,8 +57,7 @@ async def create_spec(
         content_json=data.content_json,
         created_by=user.id,
     )
-    db.add(version)
-    await db.flush()
+    await version.insert()
 
     logger.info("spec_created", spec_id=str(spec.id), project_id=project_id)
     return spec
@@ -76,13 +68,9 @@ async def get_spec(
     project_id: str,
     spec_id: str,
     user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
 ) -> Spec:
-    await _get_user_project(project_id, user, db)
-    result = await db.execute(
-        select(Spec).where(Spec.id == spec_id, Spec.project_id == project_id)
-    )
-    spec = result.scalar_one_or_none()
+    await _get_user_project(project_id, user)
+    spec = await Spec.find_one(Spec.id == spec_id, Spec.project_id == project_id)
     if spec is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Spec not found")
     return spec
@@ -94,13 +82,9 @@ async def update_spec(
     spec_id: str,
     data: SpecUpdate,
     user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
 ) -> Spec:
-    await _get_user_project(project_id, user, db)
-    result = await db.execute(
-        select(Spec).where(Spec.id == spec_id, Spec.project_id == project_id)
-    )
-    spec = result.scalar_one_or_none()
+    await _get_user_project(project_id, user)
+    spec = await Spec.find_one(Spec.id == spec_id, Spec.project_id == project_id)
     if spec is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Spec not found")
 
@@ -115,13 +99,12 @@ async def update_spec(
             diff_json={"previous_version": spec.version - 1},
             created_by=user.id,
         )
-        db.add(version)
+        await version.insert()
 
     for field, value in update_data.items():
         setattr(spec, field, value)
 
-    await db.flush()
-    await db.refresh(spec)
+    await spec.save()
     return spec
 
 
@@ -130,12 +113,11 @@ async def list_spec_versions(
     project_id: str,
     spec_id: str,
     user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
 ) -> list[SpecVersion]:
-    await _get_user_project(project_id, user, db)
-    result = await db.execute(
-        select(SpecVersion)
-        .where(SpecVersion.spec_id == spec_id)
-        .order_by(SpecVersion.version_number.desc())
+    await _get_user_project(project_id, user)
+    versions = (
+        await SpecVersion.find(SpecVersion.spec_id == spec_id)
+        .sort(-SpecVersion.version_number)
+        .to_list()
     )
-    return list(result.scalars().all())
+    return versions

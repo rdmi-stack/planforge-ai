@@ -1,31 +1,58 @@
-from collections.abc import AsyncGenerator
+"""MongoDB connection and Beanie initialization using Motor async client."""
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+import structlog
+from beanie import init_beanie
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 
 from app.config import get_settings
 
-settings = get_settings()
+logger = structlog.get_logger()
 
-engine = create_async_engine(
-    settings.DATABASE_URL,
-    echo=settings.DEBUG,
-    pool_size=20,
-    max_overflow=10,
-    pool_pre_ping=True,
-)
-
-async_session_factory = async_sessionmaker(
-    engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-)
+_client: AsyncIOMotorClient | None = None
+_database: AsyncIOMotorDatabase | None = None
 
 
-async def get_db() -> AsyncGenerator[AsyncSession]:
-    async with async_session_factory() as session:
-        try:
-            yield session
-            await session.commit()
-        except Exception:
-            await session.rollback()
-            raise
+async def init_db() -> None:
+    """Initialize Motor client and Beanie ODM with all document models.
+
+    Called once during application lifespan startup.
+    """
+    global _client, _database
+
+    settings = get_settings()
+
+    _client = AsyncIOMotorClient(settings.MONGODB_URI)
+
+    # Extract database name from URI or use configured name
+    _database = _client[settings.MONGODB_DB_NAME]
+
+    from app.models import ALL_MODELS
+
+    await init_beanie(
+        database=_database,
+        document_models=ALL_MODELS,
+    )
+
+    logger.info(
+        "mongodb_initialized",
+        database=settings.MONGODB_DB_NAME,
+        model_count=len(ALL_MODELS),
+    )
+
+
+async def close_db() -> None:
+    """Close the Motor client connection."""
+    global _client
+    if _client is not None:
+        _client.close()
+        logger.info("mongodb_connection_closed")
+
+
+def get_db() -> AsyncIOMotorDatabase:
+    """Return the Motor database instance.
+
+    Used as a FastAPI dependency when raw database access is needed.
+    """
+    if _database is None:
+        raise RuntimeError("Database not initialized. Call init_db() first.")
+    return _database

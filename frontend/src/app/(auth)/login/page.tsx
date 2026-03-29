@@ -1,7 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { Suspense, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
+import { signIn } from "next-auth/react"
 import { motion } from "framer-motion"
 import { Eye, EyeOff, Mail, Lock, ArrowRight, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -15,7 +17,11 @@ const fadeUp = {
   }),
 }
 
-export default function LoginPage() {
+function LoginForm() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const callbackUrl = searchParams.get("callbackUrl") || "/projects"
+
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
@@ -26,9 +32,28 @@ export default function LoginPage() {
     e.preventDefault()
     setError("")
     setLoading(true)
-    // Placeholder — replace with actual auth
-    await new Promise((r) => setTimeout(r, 1500))
-    setLoading(false)
+
+    try {
+      const result = await signIn("credentials", {
+        email,
+        password,
+        redirect: false,
+      })
+
+      if (result?.error) {
+        setError(result.error === "CredentialsSignin"
+          ? "Invalid email or password"
+          : result.error)
+        setLoading(false)
+        return
+      }
+
+      router.push(callbackUrl)
+      router.refresh()
+    } catch {
+      setError("Something went wrong. Please try again.")
+      setLoading(false)
+    }
   }
 
   return (
@@ -191,5 +216,13 @@ export default function LoginPage() {
         </Link>
       </motion.p>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   )
 }

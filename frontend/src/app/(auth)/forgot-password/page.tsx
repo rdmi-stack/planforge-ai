@@ -12,6 +12,7 @@ import {
   KeyRound,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { apiPost, ApiError } from "@/lib/api-client"
 
 const fadeUp = {
   hidden: { opacity: 0, y: 16 },
@@ -32,9 +33,25 @@ export default function ForgotPasswordPage() {
     e.preventDefault()
     setError("")
     setLoading(true)
-    await new Promise((r) => setTimeout(r, 1500))
-    setLoading(false)
-    setSent(true)
+
+    try {
+      await apiPost("/auth/forgot-password", { email })
+      setSent(true)
+    } catch (err) {
+      if (err instanceof ApiError) {
+        // Even on error we show success to avoid email enumeration,
+        // unless the backend explicitly returns a user-facing message.
+        if (err.status === 422) {
+          setError(err.detail)
+        } else {
+          setSent(true)
+        }
+      } else {
+        setError("Something went wrong. Please try again.")
+      }
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (

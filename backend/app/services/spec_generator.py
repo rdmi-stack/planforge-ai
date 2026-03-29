@@ -1,13 +1,10 @@
 """PRD and specification generation service using Claude AI."""
 
-import json
 from pathlib import Path
 from uuid import UUID
 
 import structlog
 from jinja2 import Environment, FileSystemLoader
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.client import AIClient, ModelTier
 from app.models.project import Project
@@ -27,8 +24,7 @@ class SpecGenerator:
     Automatically creates versioned snapshots for diff tracking.
     """
 
-    def __init__(self, db: AsyncSession) -> None:
-        self.db = db
+    def __init__(self) -> None:
         self.ai_client = AIClient()
         self.jinja_env = Environment(
             loader=FileSystemLoader(str(PROMPTS_DIR)),
@@ -81,8 +77,7 @@ class SpecGenerator:
             status="draft",
             version=1,
         )
-        self.db.add(spec)
-        await self.db.flush()
+        await spec.insert()
 
         # Create initial version
         version = SpecVersion(
@@ -90,11 +85,9 @@ class SpecGenerator:
             version_number=1,
             content_json=spec.content_json,
             diff_json=None,
-            created_by=None,  # System generated
+            created_by=None,
         )
-        self.db.add(version)
-        await self.db.commit()
-        await self.db.refresh(spec)
+        await version.insert()
 
         logger.info("spec_generation_complete", spec_id=str(spec.id), project_id=str(project_id))
         return spec
@@ -106,8 +99,7 @@ class SpecGenerator:
         user_id: UUID,
     ) -> SpecVersion:
         """Create a new version of an existing spec with diff tracking."""
-        result = await self.db.execute(select(Spec).where(Spec.id == spec_id))
-        spec = result.scalar_one_or_none()
+        spec = await Spec.find_one(Spec.id == spec_id)
         if not spec:
             raise ValueError(f"Spec {spec_id} not found")
 
@@ -118,6 +110,7 @@ class SpecGenerator:
         new_version_number = spec.version + 1
         spec.content_json = new_content
         spec.version = new_version_number
+        await spec.save()
 
         # Create version record with diff
         diff = self._compute_diff(old_content, new_content)
@@ -128,9 +121,7 @@ class SpecGenerator:
             diff_json=diff,
             created_by=user_id,
         )
-        self.db.add(version)
-        await self.db.commit()
-        await self.db.refresh(version)
+        await version.insert()
 
         logger.info("spec_version_created", spec_id=str(spec_id), version=new_version_number)
         return version
@@ -142,8 +133,7 @@ class SpecGenerator:
         additional_context: str | None = None,
     ) -> str:
         """Regenerate a specific section of a spec with optional new context."""
-        result = await self.db.execute(select(Spec).where(Spec.id == spec_id))
-        spec = result.scalar_one_or_none()
+        spec = await Spec.find_one(Spec.id == spec_id)
         if not spec:
             raise ValueError(f"Spec {spec_id} not found")
 
@@ -197,8 +187,7 @@ class SpecGenerator:
         return {"added": added, "removed": removed, "modified": modified}
 
     async def _get_project(self, project_id: UUID) -> Project:
-        result = await self.db.execute(select(Project).where(Project.id == project_id))
-        project = result.scalar_one_or_none()
+        project = await Project.find_one(Project.id == project_id)
         if not project:
             raise ValueError(f"Project {project_id} not found")
         return project

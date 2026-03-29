@@ -1,30 +1,29 @@
+"""Organization and OrgMember document models."""
+
 import uuid
 
-from sqlalchemy import ForeignKey, String
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from beanie import Document, Indexed
+from pydantic import Field
 
-from app.models.base import Base
-
-
-class Organization(Base):
-    __tablename__ = "organizations"
-
-    name: Mapped[str] = mapped_column(String(200))
-    slug: Mapped[str] = mapped_column(String(100), unique=True, index=True)
-    plan: Mapped[str] = mapped_column(String(50), default="free")
-    stripe_customer_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
-
-    users: Mapped[list["User"]] = relationship(back_populates="organization")
-    members: Mapped[list["OrgMember"]] = relationship(back_populates="organization", cascade="all, delete-orphan")
-    projects: Mapped[list["Project"]] = relationship(back_populates="organization")
+from app.models.base import TimestampMixin
 
 
-class OrgMember(Base):
-    __tablename__ = "org_members"
+class OrgMember(TimestampMixin, Document):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4)
+    org_id: uuid.UUID
+    user_id: uuid.UUID
+    role: str = "member"
 
-    org_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"))
-    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
-    role: Mapped[str] = mapped_column(String(50), default="member")
+    class Settings:
+        name = "org_members"
 
-    organization: Mapped["Organization"] = relationship(back_populates="members")
-    user: Mapped["User"] = relationship()
+
+class Organization(TimestampMixin, Document):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4)
+    name: str
+    slug: Indexed(str, unique=True)  # type: ignore[valid-type]
+    plan: str = "free"
+    stripe_customer_id: str | None = None
+
+    class Settings:
+        name = "organizations"

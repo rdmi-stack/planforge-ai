@@ -6,8 +6,6 @@ from uuid import UUID
 import structlog
 from jinja2 import Environment, FileSystemLoader
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.client import ModelTier
 from app.ai.structured_output import StructuredAIClient
@@ -39,14 +37,9 @@ class ProductionAuditResult(BaseModel):
 
 
 class ProductionChecker:
-    """Audits project plans for production readiness across security,
-    reliability, performance, observability, operations, and scalability.
+    """Audits project plans for production readiness."""
 
-    Produces scored assessments with concrete action items.
-    """
-
-    def __init__(self, db: AsyncSession) -> None:
-        self.db = db
+    def __init__(self) -> None:
         self.structured_client = StructuredAIClient()
         self.jinja_env = Environment(
             loader=FileSystemLoader(str(PROMPTS_DIR)),
@@ -59,30 +52,15 @@ class ProductionChecker:
         architecture_summary: str | None = None,
         codebase_context: str | None = None,
     ) -> ProductionAuditResult:
-        """Run a full production readiness audit on a project.
-
-        Evaluates security, reliability, performance, observability,
-        operations, and scalability dimensions.
-        """
+        """Run a full production readiness audit on a project."""
         project = await self._get_project(project_id)
 
         # Gather features and tasks
-        features_result = await self.db.execute(
-            select(Feature).where(Feature.project_id == project_id)
-        )
-        features = list(features_result.scalars().all())
-
-        tasks_result = await self.db.execute(
-            select(Task).where(Task.project_id == project_id)
-        )
-        tasks = list(tasks_result.scalars().all())
-
-        completed_count_result = await self.db.execute(
-            select(func.count())
-            .select_from(Task)
-            .where(Task.project_id == project_id, Task.status == "done")
-        )
-        completed_tasks = completed_count_result.scalar_one()
+        features = await Feature.find(Feature.project_id == project_id).to_list()
+        tasks = await Task.find(Task.project_id == project_id).to_list()
+        completed_tasks = await Task.find(
+            Task.project_id == project_id, Task.status == "done"
+        ).count()
 
         template = self.jinja_env.get_template("production_audit.j2")
         prompt = template.render(
@@ -126,8 +104,7 @@ class ProductionChecker:
         return result
 
     async def _get_project(self, project_id: UUID) -> Project:
-        result = await self.db.execute(select(Project).where(Project.id == project_id))
-        project = result.scalar_one_or_none()
+        project = await Project.find_one(Project.id == project_id)
         if not project:
             raise ValueError(f"Project {project_id} not found")
         return project

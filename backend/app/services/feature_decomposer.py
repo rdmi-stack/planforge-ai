@@ -6,8 +6,6 @@ from uuid import UUID
 import structlog
 from jinja2 import Environment, FileSystemLoader
 from pydantic import BaseModel, Field
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.client import ModelTier
 from app.ai.structured_output import StructuredAIClient
@@ -41,14 +39,9 @@ class FeatureDecomposition(BaseModel):
 
 
 class FeatureDecomposer:
-    """Decomposes product specifications into hierarchical feature trees.
+    """Decomposes product specifications into hierarchical feature trees."""
 
-    Takes a spec document and uses AI to break it down into epics, features,
-    and user stories with effort estimates, priority scores, and dependency mappings.
-    """
-
-    def __init__(self, db: AsyncSession) -> None:
-        self.db = db
+    def __init__(self) -> None:
         self.structured_client = StructuredAIClient()
         self.jinja_env = Environment(
             loader=FileSystemLoader(str(PROMPTS_DIR)),
@@ -60,18 +53,12 @@ class FeatureDecomposer:
         project_id: UUID,
         spec_id: UUID,
     ) -> list[Feature]:
-        """Break down a spec into features and persist them.
-
-        Returns the list of created Feature ORM instances.
-        """
+        """Break down a spec into features and persist them."""
         project = await self._get_project(project_id)
         spec = await self._get_spec(spec_id)
 
         # Load existing features to avoid duplication
-        existing_result = await self.db.execute(
-            select(Feature).where(Feature.project_id == project_id)
-        )
-        existing_features = list(existing_result.scalars().all())
+        existing_features = await Feature.find(Feature.project_id == project_id).to_list()
 
         template = self.jinja_env.get_template("feature_breakdown.j2")
         prompt = template.render(
@@ -121,12 +108,9 @@ class FeatureDecomposer:
             if df.parent_title and df.parent_title in title_to_feature:
                 feature.parent_feature_id = title_to_feature[df.parent_title].id
 
-            self.db.add(feature)
-            await self.db.flush()
+            await feature.insert()
             title_to_feature[df.title] = feature
             created_features.append(feature)
-
-        await self.db.commit()
 
         logger.info(
             "feature_decomposition_complete",
@@ -148,14 +132,13 @@ class FeatureDecomposer:
     ) -> Feature:
         """Manually add a single feature to a project."""
         # Determine sort order
-        result = await self.db.execute(
-            select(Feature)
-            .where(Feature.project_id == project_id)
-            .order_by(Feature.sort_order.desc())
+        last = (
+            await Feature.find(Feature.project_id == project_id)
+            .sort(-Feature.sort_order)
             .limit(1)
+            .to_list()
         )
-        last = result.scalar_one_or_none()
-        sort_order = (last.sort_order + 1) if last else 0
+        sort_order = (last[0].sort_order + 1) if last else 0
 
         feature = Feature(
             project_id=project_id,
@@ -169,21 +152,17 @@ class FeatureDecomposer:
             parent_feature_id=parent_feature_id,
             sort_order=sort_order,
         )
-        self.db.add(feature)
-        await self.db.commit()
-        await self.db.refresh(feature)
+        await feature.insert()
         return feature
 
     async def _get_project(self, project_id: UUID) -> Project:
-        result = await self.db.execute(select(Project).where(Project.id == project_id))
-        project = result.scalar_one_or_none()
+        project = await Project.find_one(Project.id == project_id)
         if not project:
             raise ValueError(f"Project {project_id} not found")
         return project
 
     async def _get_spec(self, spec_id: UUID) -> Spec:
-        result = await self.db.execute(select(Spec).where(Spec.id == spec_id))
-        spec = result.scalar_one_or_none()
+        spec = await Spec.find_one(Spec.id == spec_id)
         if not spec:
             raise ValueError(f"Spec {spec_id} not found")
         return spec

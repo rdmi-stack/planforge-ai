@@ -19,22 +19,16 @@ async def stripe_webhook(
     request: Request,
     stripe_signature: str | None = Header(None, alias="stripe-signature"),
 ) -> dict:
-    """Handle Stripe webhook events.
-
-    Validates the webhook signature, then processes subscription lifecycle
-    events (checkout completed, subscription updated/deleted, payment failed).
-    """
+    """Handle Stripe webhook events."""
     settings = get_settings()
     body = await request.body()
 
-    # Verify Stripe signature
     if not stripe_signature or not settings.STRIPE_WEBHOOK_SECRET:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Missing Stripe signature or webhook secret not configured",
         )
 
-    # Validate signature (simplified - in production use stripe.Webhook.construct_event)
     if not _verify_stripe_signature(body, stripe_signature, settings.STRIPE_WEBHOOK_SECRET):
         logger.warning("stripe_webhook_invalid_signature")
         raise HTTPException(
@@ -59,11 +53,7 @@ async def stripe_webhook(
 
 
 def _verify_stripe_signature(payload: bytes, signature: str, secret: str) -> bool:
-    """Verify Stripe webhook signature using HMAC-SHA256.
-
-    Stripe signatures contain a timestamp and one or more signatures in
-    the format: t=timestamp,v1=signature
-    """
+    """Verify Stripe webhook signature using HMAC-SHA256."""
     try:
         elements = dict(item.split("=", 1) for item in signature.split(","))
         timestamp = elements.get("t", "")

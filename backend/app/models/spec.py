@@ -1,23 +1,21 @@
+"""Spec document model."""
+
 import uuid
 
-from sqlalchemy import ForeignKey, Integer, String
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from beanie import Document, Indexed
+from pydantic import Field
 
-from app.models.base import Base
+from app.models.base import TimestampMixin
 
 
-class Spec(Base):
-    __tablename__ = "specs"
+class Spec(TimestampMixin, Document):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4)
+    project_id: Indexed(uuid.UUID)  # type: ignore[valid-type]
+    title: str
+    content_json: dict | None = None
+    status: str = "draft"
+    version: int = 1
+    parent_spec_id: uuid.UUID | None = None
 
-    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id"))
-    title: Mapped[str] = mapped_column(String(300))
-    content_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
-    status: Mapped[str] = mapped_column(String(50), default="draft")
-    version: Mapped[int] = mapped_column(Integer, default=1)
-    parent_spec_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("specs.id"), nullable=True)
-
-    project: Mapped["Project"] = relationship(back_populates="specs")
-    parent_spec: Mapped["Spec | None"] = relationship(remote_side="Spec.id")
-    versions: Mapped[list["SpecVersion"]] = relationship(back_populates="spec", cascade="all, delete-orphan")
-    features: Mapped[list["Feature"]] = relationship(back_populates="spec")
+    class Settings:
+        name = "specs"

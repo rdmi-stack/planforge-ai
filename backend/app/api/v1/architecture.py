@@ -4,9 +4,8 @@ from uuid import UUID
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.dependencies import get_current_user, get_db
+from app.dependencies import get_current_user
 from app.models.project import Project
 from app.models.user import User
 from app.services.architecture_engine import ArchitectureEngine
@@ -21,15 +20,11 @@ router = APIRouter(prefix="/projects/{project_id}", tags=["architecture"])
 async def _get_user_project(
     project_id: str,
     user: User,
-    db: AsyncSession,
 ) -> Project:
     """Fetch a project ensuring it belongs to the current user."""
-    from sqlalchemy import select
-
-    result = await db.execute(
-        select(Project).where(Project.id == project_id, Project.owner_id == user.id)
+    project = await Project.find_one(
+        Project.id == project_id, Project.owner_id == user.id
     )
-    project = result.scalar_one_or_none()
     if project is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     return project
@@ -39,22 +34,16 @@ async def _get_user_project(
 async def generate_architecture(
     project_id: str,
     user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Generate a comprehensive technical architecture for a project.
-
-    Produces system design, database schema, API contracts, infrastructure
-    recommendations, and security considerations based on the project's
-    spec and features.
-    """
-    await _get_user_project(project_id, user, db)
+    """Generate a comprehensive technical architecture for a project."""
+    await _get_user_project(project_id, user)
 
     # Optionally gather codebase context
-    analyzer = CodebaseAnalyzer(db)
+    analyzer = CodebaseAnalyzer()
     codebase_context = await analyzer.get_codebase_context_summary(UUID(project_id))
     await analyzer.close()
 
-    engine = ArchitectureEngine(db)
+    engine = ArchitectureEngine()
     architecture = await engine.generate_architecture(
         project_id=UUID(project_id),
         codebase_context=codebase_context or None,
@@ -68,18 +57,11 @@ async def generate_architecture(
 async def get_architecture(
     project_id: str,
     user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Retrieve the latest architecture document for a project.
+    """Retrieve the latest architecture document for a project."""
+    await _get_user_project(project_id, user)
 
-    Returns the previously generated architecture or an empty result
-    if no architecture has been generated yet.
-    """
-    await _get_user_project(project_id, user, db)
-
-    # For now, architecture is regenerated on demand
-    # In production, this would fetch from a stored architecture record
-    engine = ArchitectureEngine(db)
+    engine = ArchitectureEngine()
     try:
         architecture = await engine.generate_architecture(project_id=UUID(project_id))
         return {"data": architecture}
@@ -91,17 +73,11 @@ async def get_architecture(
 async def run_production_check(
     project_id: str,
     user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Run a production readiness audit on a project.
+    """Run a production readiness audit on a project."""
+    await _get_user_project(project_id, user)
 
-    Evaluates the project across security, reliability, performance,
-    observability, operations, and scalability dimensions. Returns
-    scored assessments with concrete action items.
-    """
-    await _get_user_project(project_id, user, db)
-
-    checker = ProductionChecker(db)
+    checker = ProductionChecker()
     result = await checker.run_audit(project_id=UUID(project_id))
 
     logger.info(

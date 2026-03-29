@@ -3,8 +3,6 @@
 from uuid import UUID
 
 import structlog
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.project import Project
 from app.models.spec import Spec
@@ -14,14 +12,7 @@ logger = structlog.get_logger()
 
 
 class TemplateEngine:
-    """Manages project templates for quick-start spec and architecture generation.
-
-    Templates provide pre-built specification structures, architecture patterns,
-    and feature breakdowns for common project types (SaaS, mobile app, API, etc.).
-    """
-
-    def __init__(self, db: AsyncSession) -> None:
-        self.db = db
+    """Manages project templates for quick-start spec and architecture generation."""
 
     async def list_templates(
         self,
@@ -29,39 +20,43 @@ class TemplateEngine:
         is_public: bool = True,
         user_id: UUID | None = None,
     ) -> list[Template]:
-        """List available templates, optionally filtered by category.
-
-        Returns public templates and user's private templates.
-        """
-        query = select(Template)
-
-        conditions = []
-        if category:
-            conditions.append(Template.category == category)
+        """List available templates, optionally filtered by category."""
+        conditions = {}
 
         if is_public and user_id:
-            # Public templates OR user's own templates
-            query = query.where(
-                (Template.is_public == True) | (Template.created_by == user_id)  # noqa: E712
-            )
+            # Public templates OR user's own templates - need $or query
+            templates_public = await Template.find(
+                Template.is_public == True  # noqa: E712
+            ).to_list()
+            templates_user = await Template.find(
+                Template.created_by == user_id
+            ).to_list()
+            # Deduplicate
+            seen_ids = set()
+            templates = []
+            for t in templates_public + templates_user:
+                if t.id not in seen_ids:
+                    seen_ids.add(t.id)
+                    templates.append(t)
+            if category:
+                templates = [t for t in templates if t.category == category]
+            templates.sort(key=lambda t: t.name)
+            return templates
         elif is_public:
-            query = query.where(Template.is_public == True)  # noqa: E712
+            query = Template.find(Template.is_public == True)  # noqa: E712
         elif user_id:
-            query = query.where(Template.created_by == user_id)
+            query = Template.find(Template.created_by == user_id)
+        else:
+            query = Template.find()
 
         if category:
-            query = query.where(Template.category == category)
+            query = query.find(Template.category == category)
 
-        query = query.order_by(Template.name)
-        result = await self.db.execute(query)
-        return list(result.scalars().all())
+        return await query.sort(+Template.name).to_list()
 
     async def get_template(self, template_id: UUID) -> Template:
         """Get a single template by ID."""
-        result = await self.db.execute(
-            select(Template).where(Template.id == template_id)
-        )
-        template = result.scalar_one_or_none()
+        template = await Template.find_one(Template.id == template_id)
         if not template:
             raise ValueError(f"Template {template_id} not found")
         return template
@@ -71,17 +66,12 @@ class TemplateEngine:
         project_id: UUID,
         template_id: UUID,
     ) -> Spec:
-        """Apply a template to a project, creating an initial spec from the template.
-
-        Copies the template's spec structure and architecture into a new spec
-        for the project, ready for customization.
-        """
+        """Apply a template to a project, creating an initial spec from the template."""
         template = await self.get_template(template_id)
         project = await self._get_project(project_id)
 
         spec_template = template.spec_template_json or {}
 
-        # Create spec from template
         spec = Spec(
             project_id=project_id,
             title=f"{project.name} - Specification (from {template.name})",
@@ -93,9 +83,7 @@ class TemplateEngine:
             status="draft",
             version=1,
         )
-        self.db.add(spec)
-        await self.db.commit()
-        await self.db.refresh(spec)
+        await spec.insert()
 
         logger.info(
             "template_applied",
@@ -115,7 +103,7 @@ class TemplateEngine:
         is_public: bool = False,
         created_by: UUID | None = None,
     ) -> Template:
-        """Create a new template from scratch or from an existing project's artifacts."""
+        """Create a new template."""
         template = Template(
             name=name,
             category=category,
@@ -125,16 +113,13 @@ class TemplateEngine:
             is_public=is_public,
             created_by=created_by,
         )
-        self.db.add(template)
-        await self.db.commit()
-        await self.db.refresh(template)
+        await template.insert()
 
         logger.info("template_created", template_id=str(template.id), name=name)
         return template
 
     async def _get_project(self, project_id: UUID) -> Project:
-        result = await self.db.execute(select(Project).where(Project.id == project_id))
-        project = result.scalar_one_or_none()
+        project = await Project.find_one(Project.id == project_id)
         if not project:
             raise ValueError(f"Project {project_id} not found")
         return project

@@ -1,20 +1,20 @@
+"""DecisionLog document model."""
+
 import uuid
 
-from sqlalchemy import ForeignKey, String, Text
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from beanie import Document, Indexed
+from pydantic import Field
 
-from app.models.base import Base
+from app.models.base import TimestampMixin
 
 
-class DecisionLog(Base):
-    __tablename__ = "decision_log"
+class DecisionLog(TimestampMixin, Document):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4)
+    project_id: Indexed(uuid.UUID)  # type: ignore[valid-type]
+    decision: str
+    reasoning: str | None = None
+    alternatives_json: list[dict] | None = None
+    made_by: uuid.UUID
 
-    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id"))
-    decision: Mapped[str] = mapped_column(Text)
-    reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
-    alternatives_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
-    made_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
-
-    project: Mapped["Project"] = relationship(back_populates="decision_logs")
-    author: Mapped["User"] = relationship()
+    class Settings:
+        name = "decision_log"

@@ -1,9 +1,7 @@
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.dependencies import get_current_user, get_db
+from app.dependencies import get_current_user
 from app.models.project import Project
 from app.models.task import Task
 from app.models.user import User
@@ -13,11 +11,10 @@ logger = structlog.get_logger()
 router = APIRouter(prefix="/projects/{project_id}/tasks", tags=["tasks"])
 
 
-async def _get_user_project(project_id: str, user: User, db: AsyncSession) -> Project:
-    result = await db.execute(
-        select(Project).where(Project.id == project_id, Project.owner_id == user.id)
+async def _get_user_project(project_id: str, user: User) -> Project:
+    project = await Project.find_one(
+        Project.id == project_id, Project.owner_id == user.id
     )
-    project = result.scalar_one_or_none()
     if project is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     return project
@@ -28,14 +25,13 @@ async def list_tasks(
     project_id: str,
     status_filter: str | None = None,
     user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
 ) -> list[Task]:
-    await _get_user_project(project_id, user, db)
-    query = select(Task).where(Task.project_id == project_id)
+    await _get_user_project(project_id, user)
+    query = Task.find(Task.project_id == project_id)
     if status_filter:
-        query = query.where(Task.status == status_filter)
-    result = await db.execute(query.order_by(Task.sequence_order))
-    return list(result.scalars().all())
+        query = Task.find(Task.project_id == project_id, Task.status == status_filter)
+    tasks = await query.sort(+Task.sequence_order).to_list()
+    return tasks
 
 
 @router.post("/", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
@@ -43,9 +39,8 @@ async def create_task(
     project_id: str,
     data: TaskCreate,
     user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
 ) -> Task:
-    await _get_user_project(project_id, user, db)
+    await _get_user_project(project_id, user)
 
     task = Task(
         project_id=project_id,
@@ -59,9 +54,7 @@ async def create_task(
         estimated_minutes=data.estimated_minutes,
         agent_type=data.agent_type,
     )
-    db.add(task)
-    await db.flush()
-    await db.refresh(task)
+    await task.insert()
     logger.info("task_created", task_id=str(task.id), project_id=project_id)
     return task
 
@@ -71,13 +64,9 @@ async def get_task(
     project_id: str,
     task_id: str,
     user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
 ) -> Task:
-    await _get_user_project(project_id, user, db)
-    result = await db.execute(
-        select(Task).where(Task.id == task_id, Task.project_id == project_id)
-    )
-    task = result.scalar_one_or_none()
+    await _get_user_project(project_id, user)
+    task = await Task.find_one(Task.id == task_id, Task.project_id == project_id)
     if task is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
     return task
@@ -89,13 +78,9 @@ async def update_task(
     task_id: str,
     data: TaskUpdate,
     user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
 ) -> Task:
-    await _get_user_project(project_id, user, db)
-    result = await db.execute(
-        select(Task).where(Task.id == task_id, Task.project_id == project_id)
-    )
-    task = result.scalar_one_or_none()
+    await _get_user_project(project_id, user)
+    task = await Task.find_one(Task.id == task_id, Task.project_id == project_id)
     if task is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
 
@@ -103,8 +88,7 @@ async def update_task(
     for field, value in update_data.items():
         setattr(task, field, value)
 
-    await db.flush()
-    await db.refresh(task)
+    await task.save()
     return task
 
 
@@ -113,13 +97,9 @@ async def delete_task(
     project_id: str,
     task_id: str,
     user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
 ) -> None:
-    await _get_user_project(project_id, user, db)
-    result = await db.execute(
-        select(Task).where(Task.id == task_id, Task.project_id == project_id)
-    )
-    task = result.scalar_one_or_none()
+    await _get_user_project(project_id, user)
+    task = await Task.find_one(Task.id == task_id, Task.project_id == project_id)
     if task is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
-    await db.delete(task)
+    await task.delete()

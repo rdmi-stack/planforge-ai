@@ -4,11 +4,9 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from jose import jwt
 from passlib.context import CryptContext
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from app.dependencies import get_current_user, get_db
+from app.dependencies import get_current_user
 from app.models.user import User
 from app.schemas.user import TokenResponse, UserCreate, UserLogin, UserResponse
 
@@ -32,9 +30,8 @@ def create_refresh_token(user_id: str, expires_days: int) -> str:
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def register(data: UserCreate, db: AsyncSession = Depends(get_db)) -> User:
-    result = await db.execute(select(User).where(User.email == data.email))
-    existing = result.scalar_one_or_none()
+async def register(data: UserCreate) -> User:
+    existing = await User.find_one(User.email == data.email)
     if existing:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -46,17 +43,14 @@ async def register(data: UserCreate, db: AsyncSession = Depends(get_db)) -> User
         name=data.name,
         password_hash=pwd_context.hash(data.password),
     )
-    db.add(user)
-    await db.flush()
-    await db.refresh(user)
+    await user.insert()
     logger.info("user_registered", user_id=str(user.id), email=user.email)
     return user
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(data: UserLogin, db: AsyncSession = Depends(get_db)) -> dict[str, str]:
-    result = await db.execute(select(User).where(User.email == data.email))
-    user = result.scalar_one_or_none()
+async def login(data: UserLogin) -> dict[str, str]:
+    user = await User.find_one(User.email == data.email)
 
     if user is None or not pwd_context.verify(data.password, user.password_hash):
         raise HTTPException(
@@ -79,7 +73,6 @@ async def login(data: UserLogin, db: AsyncSession = Depends(get_db)) -> dict[str
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh_token(
     refresh_token: str,
-    db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
     settings = get_settings()
     try:
@@ -96,8 +89,7 @@ async def refresh_token(
             detail="Invalid refresh token",
         ) from exc
 
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalar_one_or_none()
+    user = await User.find_one(User.id == user_id)
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

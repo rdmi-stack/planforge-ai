@@ -1,9 +1,7 @@
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.dependencies import get_current_user, get_db
+from app.dependencies import get_current_user
 from app.models.project import Project
 from app.models.user import User
 from app.schemas.project import ProjectCreate, ProjectList, ProjectResponse, ProjectUpdate
@@ -17,18 +15,17 @@ async def list_projects(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
     user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
 ) -> dict:
-    base_query = select(Project).where(Project.owner_id == user.id)
-
-    count_result = await db.execute(select(func.count()).select_from(base_query.subquery()))
-    total = count_result.scalar_one()
+    total = await Project.find(Project.owner_id == user.id).count()
 
     offset = (page - 1) * per_page
-    result = await db.execute(
-        base_query.order_by(Project.created_at.desc()).offset(offset).limit(per_page)
+    projects = (
+        await Project.find(Project.owner_id == user.id)
+        .sort(-Project.created_at)
+        .skip(offset)
+        .limit(per_page)
+        .to_list()
     )
-    projects = result.scalars().all()
 
     total_pages = (total + per_page - 1) // per_page
     return {
@@ -46,7 +43,6 @@ async def list_projects(
 async def create_project(
     data: ProjectCreate,
     user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
 ) -> Project:
     if user.org_id is None:
         raise HTTPException(
@@ -62,9 +58,7 @@ async def create_project(
         github_repo_url=data.github_repo_url,
         tech_stack_json=data.tech_stack_json,
     )
-    db.add(project)
-    await db.flush()
-    await db.refresh(project)
+    await project.insert()
     logger.info("project_created", project_id=str(project.id), user_id=str(user.id))
     return project
 
@@ -73,12 +67,10 @@ async def create_project(
 async def get_project(
     project_id: str,
     user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
 ) -> Project:
-    result = await db.execute(
-        select(Project).where(Project.id == project_id, Project.owner_id == user.id)
+    project = await Project.find_one(
+        Project.id == project_id, Project.owner_id == user.id
     )
-    project = result.scalar_one_or_none()
     if project is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     return project
@@ -89,12 +81,10 @@ async def update_project(
     project_id: str,
     data: ProjectUpdate,
     user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
 ) -> Project:
-    result = await db.execute(
-        select(Project).where(Project.id == project_id, Project.owner_id == user.id)
+    project = await Project.find_one(
+        Project.id == project_id, Project.owner_id == user.id
     )
-    project = result.scalar_one_or_none()
     if project is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
 
@@ -102,8 +92,7 @@ async def update_project(
     for field, value in update_data.items():
         setattr(project, field, value)
 
-    await db.flush()
-    await db.refresh(project)
+    await project.save()
     return project
 
 
@@ -111,14 +100,12 @@ async def update_project(
 async def delete_project(
     project_id: str,
     user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
 ) -> None:
-    result = await db.execute(
-        select(Project).where(Project.id == project_id, Project.owner_id == user.id)
+    project = await Project.find_one(
+        Project.id == project_id, Project.owner_id == user.id
     )
-    project = result.scalar_one_or_none()
     if project is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
 
-    await db.delete(project)
+    await project.delete()
     logger.info("project_deleted", project_id=project_id, user_id=str(user.id))

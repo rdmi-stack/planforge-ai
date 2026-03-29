@@ -8,8 +8,6 @@ from uuid import UUID
 
 import structlog
 from jinja2 import Environment, FileSystemLoader
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.client import AIClient, ModelTier
 from app.ai.structured_output import StructuredAIClient
@@ -32,8 +30,7 @@ class AIPlannerService:
     context to produce increasingly detailed planning artifacts.
     """
 
-    def __init__(self, db: AsyncSession) -> None:
-        self.db = db
+    def __init__(self) -> None:
         self.ai_client = AIClient()
         self.structured_client = StructuredAIClient()
         self.jinja_env = Environment(
@@ -47,11 +44,7 @@ class AIPlannerService:
         user_input: str,
         conversation_history: list[dict] | None = None,
     ) -> str:
-        """Generate 3-5 clarifying questions based on the user's project description.
-
-        These questions target gaps in the description: scale, edge cases,
-        integrations, auth model, MVP scope, and other critical dimensions.
-        """
+        """Generate 3-5 clarifying questions based on the user's project description."""
         project = await self._get_project(project_id)
         template = self.jinja_env.get_template("smart_questions.j2")
 
@@ -81,29 +74,25 @@ class AIPlannerService:
         project_id: UUID,
         conversation_summary: str,
     ) -> dict:
-        """Run the full planning pipeline: spec -> features -> tasks.
-
-        This is the main orchestration method, typically triggered as a
-        background task via Celery for long-running generation.
-        """
+        """Run the full planning pipeline: spec -> features -> tasks."""
         logger.info("full_plan_generation_start", project_id=str(project_id))
 
         # Step 1: Generate spec
-        spec_generator = SpecGenerator(self.db)
+        spec_generator = SpecGenerator()
         spec = await spec_generator.generate_spec(
             project_id=project_id,
             conversation_summary=conversation_summary,
         )
 
         # Step 2: Decompose into features
-        decomposer = FeatureDecomposer(self.db)
+        decomposer = FeatureDecomposer()
         features = await decomposer.decompose_spec(
             project_id=project_id,
             spec_id=spec.id,
         )
 
         # Step 3: Generate tasks for each feature
-        task_gen = TaskGenerator(self.db)
+        task_gen = TaskGenerator()
         all_tasks = []
         for feature in features:
             tasks = await task_gen.generate_tasks(
@@ -132,20 +121,13 @@ class AIPlannerService:
         user_message: str,
         session_id: UUID | None = None,
     ):
-        """Stream a planning chat response for the given project.
-
-        Maintains conversation context via the chat session and yields
-        text chunks as they arrive from the AI model.
-        """
+        """Stream a planning chat response for the given project."""
         project = await self._get_project(project_id)
 
         # Load or create chat session
         conversation_history = []
         if session_id:
-            result = await self.db.execute(
-                select(ChatSession).where(ChatSession.id == session_id)
-            )
-            session = result.scalar_one_or_none()
+            session = await ChatSession.find_one(ChatSession.id == session_id)
             if session and session.messages_json:
                 conversation_history = session.messages_json
 
@@ -158,7 +140,7 @@ class AIPlannerService:
             context_parts.append(f"Tech Stack: {project.tech_stack_json}")
 
         history_text = ""
-        for msg in conversation_history[-10:]:  # Last 10 messages for context
+        for msg in conversation_history[-10:]:
             history_text += f"\n{msg['role'].upper()}: {msg['content']}"
 
         system_prompt = (
@@ -180,10 +162,7 @@ class AIPlannerService:
 
     async def _get_project(self, project_id: UUID) -> Project:
         """Fetch a project by ID or raise."""
-        result = await self.db.execute(
-            select(Project).where(Project.id == project_id)
-        )
-        project = result.scalar_one_or_none()
+        project = await Project.find_one(Project.id == project_id)
         if not project:
             raise ValueError(f"Project {project_id} not found")
         return project

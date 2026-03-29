@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation"
 import Link from "next/link"
 import { motion, AnimatePresence } from "framer-motion"
+import { useSession, signOut } from "next-auth/react"
 import {
   LayoutDashboard,
   FolderKanban,
@@ -54,10 +55,23 @@ const BOTTOM_NAV: NavItem[] = [
   { label: "Billing", href: "/billing", icon: CreditCard },
 ]
 
+function getInitials(name: string | null | undefined): string {
+  if (!name) return "?"
+  const parts = name.trim().split(/\s+/)
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+  }
+  return name.slice(0, 2).toUpperCase()
+}
+
 export function Sidebar() {
   const pathname = usePathname()
+  const { data: session } = useSession()
   const { sidebarCollapsed, setSidebarCollapsed, setCommandPaletteOpen } =
     useUiStore()
+
+  const userName = session?.user?.name || "User"
+  const userInitials = getInitials(session?.user?.name)
 
   // Detect if we're inside a project
   const projectMatch = pathname.match(/^\/projects\/([^/]+)/)
@@ -222,17 +236,34 @@ export function Sidebar() {
           )}
         >
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-forest text-xs font-bold text-white">
-            RR
+            {userInitials}
           </div>
           {!sidebarCollapsed && (
             <div className="flex-1 min-w-0">
               <div className="truncate text-sm font-medium text-navy">
-                Ranjit Rajput
+                {userName}
               </div>
-              <div className="truncate text-[11px] text-muted">Pro Plan</div>
+              <div className="truncate text-[11px] text-muted">
+                {session?.user?.email || "Pro Plan"}
+              </div>
             </div>
           )}
         </div>
+
+        {/* Sign out */}
+        {session && (
+          <button
+            onClick={() => signOut({ callbackUrl: "/login" })}
+            className={cn(
+              "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted transition-colors hover:bg-cream-dark hover:text-navy cursor-pointer",
+              sidebarCollapsed && "justify-center px-0"
+            )}
+            title={sidebarCollapsed ? "Sign out" : undefined}
+          >
+            <LogOut className="h-4 w-4 shrink-0 text-muted-light" strokeWidth={1.5} />
+            {!sidebarCollapsed && "Sign out"}
+          </button>
+        )}
       </div>
     </aside>
   )

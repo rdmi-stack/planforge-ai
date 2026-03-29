@@ -4,8 +4,6 @@ import json
 from uuid import UUID
 
 import structlog
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.feature import Feature
 from app.models.project import Project
@@ -16,29 +14,14 @@ logger = structlog.get_logger()
 
 
 class ExportService:
-    """Exports project plans, specs, and tasks in multiple formats.
-
-    Supports Markdown, JSON, MCP (Model Context Protocol), and
-    CLI-ready formats for consumption by different tools and workflows.
-    """
-
-    def __init__(self, db: AsyncSession) -> None:
-        self.db = db
+    """Exports project plans, specs, and tasks in multiple formats."""
 
     async def export_project(
         self,
         project_id: UUID,
         format: str,
     ) -> dict:
-        """Export a full project in the specified format.
-
-        Args:
-            project_id: The project to export.
-            format: One of 'markdown', 'json', 'mcp', 'cli'.
-
-        Returns:
-            Dict with 'content' (str) and 'filename' keys.
-        """
+        """Export a full project in the specified format."""
         exporters = {
             "markdown": self._export_markdown,
             "json": self._export_json,
@@ -76,7 +59,6 @@ class ExportService:
             lines.append(project.description)
             lines.append("")
 
-        # Specs
         for spec in specs:
             lines.append(f"## Specification: {spec.title}")
             lines.append("")
@@ -84,7 +66,6 @@ class ExportService:
             lines.append(content)
             lines.append("")
 
-        # Features
         if features:
             lines.append("## Features")
             lines.append("")
@@ -98,7 +79,6 @@ class ExportService:
                     lines.append(f"\n{f.description}")
                 lines.append("")
 
-        # Tasks
         if tasks:
             lines.append("## Implementation Tasks")
             lines.append("")
@@ -226,7 +206,6 @@ class ExportService:
         for i, t in enumerate(tasks, 1):
             lines.append(f"# Task {i}: {t.title}")
             lines.append(f"# Estimated: {t.estimated_minutes} minutes | Risk: {t.regression_risk}")
-            # Escape single quotes in prompt
             escaped_prompt = (t.prompt_text or "").replace("'", "'\\''")
             lines.append(f"echo 'Executing task {i}/{len(tasks)}: {t.title}'")
             lines.append(f"# claude-code --prompt '{escaped_prompt}'")
@@ -236,26 +215,16 @@ class ExportService:
         return {"content": content, "filename": f"{project.name.lower().replace(' ', '-')}-tasks.sh"}
 
     async def _get_project(self, project_id: UUID) -> Project:
-        result = await self.db.execute(select(Project).where(Project.id == project_id))
-        project = result.scalar_one_or_none()
+        project = await Project.find_one(Project.id == project_id)
         if not project:
             raise ValueError(f"Project {project_id} not found")
         return project
 
     async def _get_specs(self, project_id: UUID) -> list[Spec]:
-        result = await self.db.execute(
-            select(Spec).where(Spec.project_id == project_id).order_by(Spec.version.desc())
-        )
-        return list(result.scalars().all())
+        return await Spec.find(Spec.project_id == project_id).sort(-Spec.version).to_list()
 
     async def _get_features(self, project_id: UUID) -> list[Feature]:
-        result = await self.db.execute(
-            select(Feature).where(Feature.project_id == project_id).order_by(Feature.sort_order)
-        )
-        return list(result.scalars().all())
+        return await Feature.find(Feature.project_id == project_id).sort(+Feature.sort_order).to_list()
 
     async def _get_tasks(self, project_id: UUID) -> list[Task]:
-        result = await self.db.execute(
-            select(Task).where(Task.project_id == project_id).order_by(Task.sequence_order)
-        )
-        return list(result.scalars().all())
+        return await Task.find(Task.project_id == project_id).sort(+Task.sequence_order).to_list()

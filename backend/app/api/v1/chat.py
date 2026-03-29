@@ -1,19 +1,16 @@
 import json
-import uuid
 from collections.abc import AsyncGenerator
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from app.dependencies import get_current_user, get_db, rate_limiter
+from app.dependencies import get_current_user, rate_limiter
 from app.models.chat_session import ChatSession
 from app.models.project import Project
 from app.models.user import User
-from app.schemas.chat import ChatRequest, ChatResponse
+from app.schemas.chat import ChatRequest
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/projects/{project_id}/chat", tags=["chat"])
@@ -60,6 +57,7 @@ async def _generate_ai_stream(
 
             messages.append({"role": "assistant", "content": full_response})
             session.messages_json = {"messages": messages}
+            await session.save()
 
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
@@ -74,25 +72,20 @@ async def chat_with_ai(
     project_id: str,
     data: ChatRequest,
     user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
 ) -> StreamingResponse:
-    result = await db.execute(
-        select(Project).where(Project.id == project_id, Project.owner_id == user.id)
+    project = await Project.find_one(
+        Project.id == project_id, Project.owner_id == user.id
     )
-    project = result.scalar_one_or_none()
     if project is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
 
     session: ChatSession | None = None
     if data.session_id:
-        sess_result = await db.execute(
-            select(ChatSession).where(
-                ChatSession.id == data.session_id,
-                ChatSession.project_id == project_id,
-                ChatSession.user_id == user.id,
-            )
+        session = await ChatSession.find_one(
+            ChatSession.id == data.session_id,
+            ChatSession.project_id == project_id,
+            ChatSession.user_id == user.id,
         )
-        session = sess_result.scalar_one_or_none()
 
     if session is None:
         session = ChatSession(
@@ -101,9 +94,7 @@ async def chat_with_ai(
             messages_json={"messages": []},
             session_type="planning",
         )
-        db.add(session)
-        await db.flush()
-        await db.refresh(session)
+        await session.insert()
 
     logger.info("chat_started", project_id=project_id, session_id=str(session.id))
 

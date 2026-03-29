@@ -1,11 +1,12 @@
-import uuid
-from datetime import datetime
+"""Timestamp mixin for Beanie document models."""
 
-from sqlalchemy import func
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from datetime import UTC, datetime
+
+from pydantic import Field
 
 
-class Base(DeclarativeBase):
-    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
+class TimestampMixin:
+    """Mixin that adds created_at and updated_at fields to Beanie documents."""
+
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

@@ -1,7 +1,9 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import Link from "next/link"
+import { signIn } from "next-auth/react"
 import { motion } from "framer-motion"
 import {
   Eye,
@@ -14,6 +16,7 @@ import {
   Check,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { apiPost, ApiError } from "@/lib/api-client"
 
 const fadeUp = {
   hidden: { opacity: 0, y: 16 },
@@ -31,6 +34,7 @@ const PASSWORD_RULES = [
 ]
 
 export default function SignupPage() {
+  const router = useRouter()
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -50,8 +54,34 @@ export default function SignupPage() {
     }
     setError("")
     setLoading(true)
-    await new Promise((r) => setTimeout(r, 1500))
-    setLoading(false)
+
+    try {
+      // Step 1: Register via the backend API
+      await apiPost("/auth/register", { name, email, password })
+
+      // Step 2: Auto-login after successful registration
+      const result = await signIn("credentials", {
+        email,
+        password,
+        redirect: false,
+      })
+
+      if (result?.error) {
+        setError("Account created but auto-login failed. Please sign in manually.")
+        setLoading(false)
+        return
+      }
+
+      router.push("/projects")
+      router.refresh()
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.detail)
+      } else {
+        setError("Something went wrong. Please try again.")
+      }
+      setLoading(false)
+    }
   }
 
   return (

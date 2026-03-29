@@ -1,9 +1,8 @@
-"""Unified AI client wrapper with Anthropic primary and OpenAI fallback."""
+"""Unified AI client wrapper with OpenAI GPT-5.4 primary and Anthropic fallback."""
 
 from collections.abc import AsyncIterator
 from enum import StrEnum
 
-import anthropic
 import openai
 import structlog
 
@@ -15,23 +14,23 @@ logger = structlog.get_logger()
 class ModelTier(StrEnum):
     """Model selection tiers mapping to specific model IDs."""
 
-    SPEC = "claude-sonnet-4-20250514"
-    TASK = "claude-sonnet-4-20250514"
-    ARCHITECTURE = "claude-sonnet-4-20250514"
-    CHAT = "claude-sonnet-4-20250514"
-    FALLBACK = "gpt-4o"
+    SPEC = "gpt-5.4"
+    TASK = "gpt-5.4"
+    ARCHITECTURE = "gpt-5.4"
+    CHAT = "gpt-5.4"
+    FAST = "gpt-5.4-mini"
+    NANO = "gpt-5.4-nano"
 
 
 class AIClient:
-    """Wrapper around Anthropic and OpenAI clients with automatic fallback.
+    """Wrapper around OpenAI GPT-5.4 client.
 
-    Provides both synchronous completion and streaming interfaces.
-    Falls back to OpenAI if the Anthropic call fails.
+    Uses GPT-5.4 as primary model for all AI generation tasks.
+    Falls back to gpt-5.4-mini if the main model fails.
     """
 
     def __init__(self) -> None:
         settings = get_settings()
-        self._anthropic = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
         self._openai = openai.AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 
     async def generate(
@@ -42,12 +41,12 @@ class AIClient:
         temperature: float = 0.3,
         max_tokens: int = 4096,
     ) -> str:
-        """Generate a completion using Anthropic with OpenAI fallback.
+        """Generate a completion using GPT-5.4.
 
         Returns the full text response.
         """
         try:
-            return await self._generate_anthropic(
+            return await self._generate_openai(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
                 model=model_tier.value,
@@ -55,11 +54,11 @@ class AIClient:
                 max_tokens=max_tokens,
             )
         except Exception as e:
-            logger.warning("anthropic_generation_failed", error=str(e), model=model_tier.value)
+            logger.warning("openai_generation_failed", error=str(e), model=model_tier.value)
             return await self._generate_openai(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
-                model=ModelTier.FALLBACK.value,
+                model=ModelTier.FAST.value,
                 temperature=temperature,
                 max_tokens=max_tokens,
             )
@@ -72,12 +71,12 @@ class AIClient:
         temperature: float = 0.3,
         max_tokens: int = 4096,
     ) -> AsyncIterator[str]:
-        """Stream a completion using Anthropic with OpenAI fallback.
+        """Stream a completion using GPT-5.4.
 
         Yields text chunks as they arrive.
         """
         try:
-            async for chunk in self._stream_anthropic(
+            async for chunk in self._stream_openai(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
                 model=model_tier.value,
@@ -86,40 +85,15 @@ class AIClient:
             ):
                 yield chunk
         except Exception as e:
-            logger.warning("anthropic_stream_failed", error=str(e), falling_back_to="openai")
+            logger.warning("openai_stream_failed", error=str(e), falling_back_to="gpt-5.4-mini")
             async for chunk in self._stream_openai(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
-                model=ModelTier.FALLBACK.value,
+                model=ModelTier.FAST.value,
                 temperature=temperature,
                 max_tokens=max_tokens,
             ):
                 yield chunk
-
-    async def _generate_anthropic(
-        self,
-        system_prompt: str,
-        user_prompt: str,
-        model: str,
-        temperature: float,
-        max_tokens: int,
-    ) -> str:
-        response = await self._anthropic.messages.create(
-            model=model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_prompt}],
-        )
-        text_blocks = [block.text for block in response.content if block.type == "text"]
-        usage = response.usage
-        logger.info(
-            "anthropic_generation_complete",
-            model=model,
-            input_tokens=usage.input_tokens,
-            output_tokens=usage.output_tokens,
-        )
-        return "".join(text_blocks)
 
     async def _generate_openai(
         self,
@@ -148,24 +122,6 @@ class AIClient:
         )
         return content
 
-    async def _stream_anthropic(
-        self,
-        system_prompt: str,
-        user_prompt: str,
-        model: str,
-        temperature: float,
-        max_tokens: int,
-    ) -> AsyncIterator[str]:
-        async with self._anthropic.messages.stream(
-            model=model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_prompt}],
-        ) as stream:
-            async for text in stream.text_stream:
-                yield text
-
     async def _stream_openai(
         self,
         system_prompt: str,
@@ -190,13 +146,5 @@ class AIClient:
                 yield delta.content
 
     async def count_tokens(self, text: str) -> int:
-        """Estimate token count for a piece of text using Anthropic's tokenizer."""
-        try:
-            result = await self._anthropic.count_tokens(
-                model=ModelTier.CHAT.value,
-                messages=[{"role": "user", "content": text}],
-            )
-            return result.input_tokens
-        except Exception:
-            # Rough estimate: ~4 chars per token
-            return len(text) // 4
+        """Estimate token count for text (rough estimate: ~4 chars per token)."""
+        return len(text) // 4

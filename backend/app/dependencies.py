@@ -1,28 +1,17 @@
-from collections.abc import AsyncGenerator
-
 import structlog
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from app.database import get_db as _get_db
 from app.models.user import User
 
 logger = structlog.get_logger()
 security = HTTPBearer()
 
 
-async def get_db() -> AsyncGenerator[AsyncSession]:
-    async for session in _get_db():
-        yield session
-
-
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: AsyncSession = Depends(get_db),
 ) -> User:
     settings = get_settings()
     token = credentials.credentials
@@ -46,8 +35,7 @@ async def get_current_user(
             detail="Invalid authentication token",
         ) from exc
 
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalar_one_or_none()
+    user = await User.find_one(User.id == user_id)
 
     if user is None:
         raise HTTPException(

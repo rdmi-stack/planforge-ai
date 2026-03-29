@@ -3,8 +3,6 @@
 from uuid import UUID
 
 import structlog
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.project import Project
 from app.utils.github_client import GitHubClient, RepoAnalysis
@@ -13,24 +11,14 @@ logger = structlog.get_logger()
 
 
 class CodebaseAnalyzer:
-    """Analyzes connected GitHub repositories to provide codebase context.
+    """Analyzes connected GitHub repositories to provide codebase context."""
 
-    Extracts tech stack information, project structure, and key configuration
-    files to enrich AI-generated specs, features, and tasks with awareness
-    of the existing codebase.
-    """
-
-    def __init__(self, db: AsyncSession, github_token: str | None = None) -> None:
-        self.db = db
+    def __init__(self, github_token: str | None = None) -> None:
         self.github_client = GitHubClient(token=github_token)
 
     async def analyze_project_repo(self, project_id: UUID) -> RepoAnalysis | None:
-        """Analyze the GitHub repo connected to a project.
-
-        Returns None if no repo is connected.
-        """
-        result = await self.db.execute(select(Project).where(Project.id == project_id))
-        project = result.scalar_one_or_none()
+        """Analyze the GitHub repo connected to a project."""
+        project = await Project.find_one(Project.id == project_id)
         if not project or not project.github_repo_url:
             logger.info("no_repo_connected", project_id=str(project_id))
             return None
@@ -55,11 +43,7 @@ class CodebaseAnalyzer:
             return None
 
     async def get_codebase_context_summary(self, project_id: UUID) -> str:
-        """Generate a text summary of the codebase for use in AI prompts.
-
-        Provides a condensed overview of languages, frameworks, structure,
-        and key files that helps the AI generate more relevant output.
-        """
+        """Generate a text summary of the codebase for use in AI prompts."""
         analysis = await self.analyze_project_repo(project_id)
         if not analysis:
             return ""
@@ -76,7 +60,6 @@ class CodebaseAnalyzer:
         if analysis.framework_hints:
             parts.append(f"Detected frameworks: {', '.join(analysis.framework_hints)}")
 
-        # Key config files
         key_files = []
         if analysis.has_package_json:
             key_files.append("package.json")
@@ -89,7 +72,6 @@ class CodebaseAnalyzer:
         if key_files:
             parts.append(f"Key files: {', '.join(key_files)}")
 
-        # Top-level directory structure
         top_dirs = sorted({
             f.path.split("/")[0]
             for f in analysis.file_tree

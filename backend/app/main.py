@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import get_settings
-from app.database import engine
+from app.database import close_db, init_db
 
 logger = structlog.get_logger()
 
@@ -16,8 +16,9 @@ logger = structlog.get_logger()
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     settings = get_settings()
     logger.info("starting_planforge_api", environment=settings.ENVIRONMENT)
+    await init_db()
     yield
-    await engine.dispose()
+    await close_db()
     logger.info("shutting_down_planforge_api")
 
 

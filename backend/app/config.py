@@ -14,8 +14,9 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     DEBUG: bool = False
 
-    # Database
-    DATABASE_URL: str = "postgresql+asyncpg://planforge:password@localhost:5432/planforge"
+    # MongoDB
+    MONGODB_URI: str = "mongodb://localhost:27017/planforge"
+    MONGODB_DB_NAME: str = "planforge"
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
@@ -49,6 +50,12 @@ class Settings(BaseSettings):
     AWS_ACCESS_KEY_ID: str = ""
     AWS_SECRET_ACCESS_KEY: str = ""
     AWS_REGION: str = "us-east-1"
+
+    # Mailgun
+    MAILGUN_API_KEY: str = ""
+    MAILGUN_DOMAIN: str = ""
+    MAILGUN_FROM_EMAIL: str = "PlanForge AI <noreply@planforge.ai>"
+    MAILGUN_REGION: str = "US"
 
     # Rate Limiting
     RATE_LIMIT_FREE: int = 20
