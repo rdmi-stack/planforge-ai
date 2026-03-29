@@ -14,6 +14,7 @@ from app.api.v1.tasks import router as tasks_router
 from app.api.v1.templates import router as templates_router
 from app.api.v1.users import router as users_router
 from app.api.v1.webhooks import router as webhooks_router
+from app.api.v1.billing import router as billing_router
 
 v1_router = APIRouter()
 
@@ -29,3 +30,4 @@ v1_router.include_router(architecture_router)
 v1_router.include_router(templates_router)
 v1_router.include_router(analytics_router)
 v1_router.include_router(webhooks_router)
+v1_router.include_router(billing_router)

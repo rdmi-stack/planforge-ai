@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /projects/
+Disallow: /settings/
+Disallow: /billing/
+Disallow: /api/
+
+Sitemap: https://planforge.ai/sitemap.xml

@@ -1,11 +1,22 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
-import { CreditCard, Check, ArrowUpRight, Receipt, Download, Sparkles, TrendingUp, Zap } from "lucide-react"
+import { CreditCard, Check, ArrowUpRight, Receipt, Download, Sparkles, TrendingUp, Zap, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { apiClientAuth } from "@/lib/api-client"
+import { useToastStore } from "@/stores/toast-store"
 
-const CURRENT_PLAN = { name: "Pro", price: 39, period: "month", generations: { used: 312, limit: 500 } }
+type SubscriptionData = {
+  plan: string
+  status: string
+  current_period_end: string | null
+  generations_used: number
+  generations_limit: number
+}
+
+const PLAN_PRICES: Record<string, number> = { free: 0, pro: 39, team: 99 }
 
 const INVOICES = [
   { id: "INV-2026-03", date: "Mar 1, 2026", amount: "$39.00", status: "Paid" },
@@ -16,7 +27,67 @@ const INVOICES = [
 
 export default function BillingPage() {
   const router = useRouter()
-  const usagePct = Math.round((CURRENT_PLAN.generations.used / CURRENT_PLAN.generations.limit) * 100)
+  const addToast = useToastStore.getState().addToast
+  const [subscription, setSubscription] = useState<SubscriptionData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [canceling, setCanceling] = useState(false)
+
+  useEffect(() => {
+    async function fetchSubscription() {
+      try {
+        const data = await apiClientAuth<SubscriptionData>("/billing/subscription")
+        setSubscription(data)
+      } catch {
+        useToastStore.getState().addToast("Failed to load billing data", "error")
+        setSubscription({ plan: "free", status: "active", current_period_end: null, generations_used: 0, generations_limit: 30 })
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchSubscription()
+  }, [])
+
+  const handleChangePlan = async (plan: "pro" | "team") => {
+    try {
+      const data = await apiClientAuth<{ url: string; session_id: string }>("/billing/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan, billing: "monthly" }),
+      })
+      router.push(data.url)
+    } catch {
+      useToastStore.getState().addToast("Failed to start checkout", "error")
+    }
+  }
+
+  const handleCancel = async () => {
+    if (!confirm("Are you sure you want to cancel your subscription?")) return
+    setCanceling(true)
+    try {
+      const data = await apiClientAuth<{ status: string; message: string }>("/billing/cancel", { method: "POST" })
+      useToastStore.getState().addToast(data.message, "info")
+      setSubscription((prev) => prev ? { ...prev, plan: "free", status: "canceled" } : prev)
+    } catch {
+      useToastStore.getState().addToast("Failed to cancel subscription", "error")
+    } finally {
+      setCanceling(false)
+    }
+  }
+
+  if (loading || !subscription) {
+    return (
+      <div className="flex items-center justify-center p-16">
+        <Loader2 className="h-6 w-6 animate-spin text-muted" />
+      </div>
+    )
+  }
+
+  const planName = subscription.plan.charAt(0).toUpperCase() + subscription.plan.slice(1)
+  const price = PLAN_PRICES[subscription.plan] ?? 0
+  const generationsLimit = subscription.generations_limit === -1 ? "Unlimited" : subscription.generations_limit
+  const usagePct = subscription.generations_limit > 0
+    ? Math.round((subscription.generations_used / subscription.generations_limit) * 100)
+    : 0
 
   return (
     <div className="p-6 sm:p-8">
@@ -31,27 +102,44 @@ export default function BillingPage() {
           <div className="flex items-start justify-between">
             <div>
               <div className="flex items-center gap-2">
-                <span className="rounded-full bg-forest px-3 py-0.5 text-xs font-bold text-white">{CURRENT_PLAN.name}</span>
+                <span className="rounded-full bg-forest px-3 py-0.5 text-xs font-bold text-white">{planName}</span>
                 <span className="text-xs text-muted">Current Plan</span>
+                {subscription.status === "canceled" && (
+                  <span className="rounded-full bg-danger/10 px-2 py-0.5 text-[10px] font-semibold text-danger">Canceled</span>
+                )}
               </div>
               <div className="mt-2 flex items-baseline gap-1">
-                <span className="text-3xl font-black text-navy">${CURRENT_PLAN.price}</span>
-                <span className="text-sm text-muted">/{CURRENT_PLAN.period}</span>
+                <span className="text-3xl font-black text-navy">${price}</span>
+                <span className="text-sm text-muted">/month</span>
               </div>
-              <p className="mt-1 text-xs text-muted">Billed monthly &middot; Next invoice Apr 1, 2026</p>
+              <p className="mt-1 text-xs text-muted">
+                {subscription.current_period_end
+                  ? `Billed monthly \u00b7 Next invoice ${new Date(subscription.current_period_end).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+                  : "Free tier"}
+              </p>
             </div>
             <div className="flex gap-2">
               <button
-                onClick={() => router.push("/pricing")}
+                onClick={() => handleChangePlan("pro")}
                 className="flex items-center gap-1.5 rounded-lg border border-border bg-white px-3 py-2 text-xs font-medium text-navy hover:bg-cream transition-colors cursor-pointer">
                 Change Plan
               </button>
-              <button
-                onClick={() => router.push("/pricing")}
-                className="flex items-center gap-1.5 rounded-lg bg-navy px-3 py-2 text-xs font-semibold text-white hover:bg-forest transition-colors cursor-pointer">
-                <ArrowUpRight className="h-3.5 w-3.5" />
-                Upgrade to Team
-              </button>
+              {subscription.plan !== "team" && (
+                <button
+                  onClick={() => handleChangePlan("team")}
+                  className="flex items-center gap-1.5 rounded-lg bg-navy px-3 py-2 text-xs font-semibold text-white hover:bg-forest transition-colors cursor-pointer">
+                  <ArrowUpRight className="h-3.5 w-3.5" />
+                  Upgrade to Team
+                </button>
+              )}
+              {subscription.plan !== "free" && subscription.status !== "canceled" && (
+                <button
+                  onClick={handleCancel}
+                  disabled={canceling}
+                  className="flex items-center gap-1.5 rounded-lg border border-danger/30 px-3 py-2 text-xs font-medium text-danger hover:bg-danger/5 transition-colors cursor-pointer disabled:opacity-50">
+                  {canceling ? "Canceling..." : "Cancel"}
+                </button>
+              )}
             </div>
           </div>
         </motion.div>
@@ -61,12 +149,18 @@ export default function BillingPage() {
           <div className="rounded-xl border border-border bg-white p-5">
             <div className="mb-3 flex items-center justify-between">
               <span className="text-xs font-bold text-navy flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5 text-forest" /> AI Generations</span>
-              <span className="text-xs font-bold text-navy">{CURRENT_PLAN.generations.used}/{CURRENT_PLAN.generations.limit}</span>
+              <span className="text-xs font-bold text-navy">{subscription.generations_used}/{generationsLimit}</span>
             </div>
-            <div className="h-2 w-full overflow-hidden rounded-full bg-cream-dark">
-              <div className={cn("h-full rounded-full transition-all", usagePct > 80 ? "bg-danger" : usagePct > 60 ? "bg-amber-400" : "bg-forest")} style={{ width: `${usagePct}%` }} />
-            </div>
-            <p className="mt-2 text-[11px] text-muted">{CURRENT_PLAN.generations.limit - CURRENT_PLAN.generations.used} remaining this month &middot; Resets Apr 1</p>
+            {subscription.generations_limit > 0 && (
+              <div className="h-2 w-full overflow-hidden rounded-full bg-cream-dark">
+                <div className={cn("h-full rounded-full transition-all", usagePct > 80 ? "bg-danger" : usagePct > 60 ? "bg-amber-400" : "bg-forest")} style={{ width: `${usagePct}%` }} />
+              </div>
+            )}
+            <p className="mt-2 text-[11px] text-muted">
+              {subscription.generations_limit === -1
+                ? "Unlimited generations on Team plan"
+                : `${subscription.generations_limit - subscription.generations_used} remaining this month`}
+            </p>
           </div>
           <div className="rounded-xl border border-border bg-white p-5">
             <div className="mb-3 flex items-center gap-1.5">
@@ -94,7 +188,7 @@ export default function BillingPage() {
                 <div className="text-[11px] text-muted">Expires 12/2028</div>
               </div>
             </div>
-            <button onClick={() => alert("Stripe integration coming soon")} className="text-xs font-medium text-forest hover:text-forest-light transition-colors cursor-pointer">Update</button>
+            <button onClick={() => useToastStore.getState().addToast("Stripe integration coming soon", "info")} className="text-xs font-medium text-forest hover:text-forest-light transition-colors cursor-pointer">Update</button>
           </div>
         </div>
 
@@ -114,7 +208,7 @@ export default function BillingPage() {
                 <span className="inline-flex items-center gap-1 rounded-full bg-success-light px-2 py-0.5 text-[10px] font-semibold text-success">
                   <Check className="h-3 w-3" /> {inv.status}
                 </span>
-                <button onClick={() => alert("Download coming soon")} className="text-muted-light hover:text-navy transition-colors cursor-pointer"><Download className="h-3.5 w-3.5" /></button>
+                <button onClick={() => useToastStore.getState().addToast("Download coming soon", "info")} className="text-muted-light hover:text-navy transition-colors cursor-pointer"><Download className="h-3.5 w-3.5" /></button>
               </div>
             </div>
           ))}

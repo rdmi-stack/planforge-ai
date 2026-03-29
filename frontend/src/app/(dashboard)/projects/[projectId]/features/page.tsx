@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useToastStore } from "@/stores/toast-store"
 import { FeatureTree } from "@/components/features/feature-tree"
 import { FeatureCard } from "@/components/features/feature-card"
 import { PrioritizationMatrix } from "@/components/features/prioritization-matrix"
@@ -107,7 +108,7 @@ export default function FeaturesPage() {
       })
       await fetchFeatures()
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to decompose features. The backend endpoint may not be available yet.")
+      useToastStore.getState().addToast(err instanceof Error ? err.message : "Failed to decompose features. The backend endpoint may not be available yet.", "error")
     } finally {
       setDecomposing(false)
     }
@@ -127,7 +128,7 @@ export default function FeaturesPage() {
       setShowAddDialog(false)
       await fetchFeatures()
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to add feature")
+      useToastStore.getState().addToast(err instanceof Error ? err.message : "Failed to add feature", "error")
     } finally {
       setAddingFeature(false)
     }

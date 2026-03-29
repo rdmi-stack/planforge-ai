@@ -1,6 +1,7 @@
 import json
 from collections.abc import AsyncGenerator
 
+import openai
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
@@ -21,13 +22,11 @@ async def _generate_ai_stream(
     project: Project,
     session: ChatSession,
 ) -> AsyncGenerator[str]:
-    """Stream AI planning responses via SSE."""
+    """Stream AI planning responses via SSE using GPT-5.4."""
     settings = get_settings()
 
     try:
-        import anthropic
-
-        client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+        client = openai.AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 
         system_prompt = (
             "You are PlanForge AI, an expert product planning assistant. "
@@ -43,23 +42,29 @@ async def _generate_ai_stream(
 
         messages = previous_messages + [{"role": "user", "content": message}]
 
-        async with client.messages.stream(
-            model="claude-sonnet-4-20250514",
+        stream = await client.chat.completions.create(
+            model="gpt-5.4",
             max_tokens=4096,
-            system=system_prompt,
-            messages=messages,
-        ) as stream:
-            full_response = ""
-            async for text in stream.text_stream:
-                full_response += text
-                event_data = json.dumps({"type": "text", "content": text})
+            stream=True,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                *messages,
+            ],
+        )
+
+        full_response = ""
+        async for chunk in stream:
+            delta = chunk.choices[0].delta
+            if delta.content:
+                full_response += delta.content
+                event_data = json.dumps({"type": "text", "content": delta.content})
                 yield f"data: {event_data}\n\n"
 
-            messages.append({"role": "assistant", "content": full_response})
-            session.messages_json = {"messages": messages}
-            await session.save()
+        messages.append({"role": "assistant", "content": full_response})
+        session.messages_json = {"messages": messages}
+        await session.save()
 
-            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+        yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
     except Exception as exc:
         logger.error("ai_stream_error", error=str(exc))

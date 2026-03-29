@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useToastStore } from "@/stores/toast-store"
 import { KanbanBoard } from "@/components/tasks/kanban-board"
 import { TaskDetailPanel } from "@/components/tasks/task-detail-panel"
 import { AgentDispatchButton } from "@/components/tasks/agent-dispatch-button"
@@ -119,7 +120,7 @@ export default function TasksPage() {
       })
       await fetchTasks()
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to generate tasks. The backend endpoint may not be available yet.")
+      useToastStore.getState().addToast(err instanceof Error ? err.message : "Failed to generate tasks. The backend endpoint may not be available yet.", "error")
     } finally {
       setGenerating(false)
     }
@@ -139,7 +140,7 @@ export default function TasksPage() {
       setShowAddDialog(false)
       await fetchTasks()
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to add task")
+      useToastStore.getState().addToast(err instanceof Error ? err.message : "Failed to add task", "error")
     } finally {
       setAddingTask(false)
     }

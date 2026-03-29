@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.w3.org/2000/svg">
+  <url><loc>https://planforge.ai/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>
+  <url><loc>https://planforge.ai/features</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://planforge.ai/pricing</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://planforge.ai/blog</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://planforge.ai/login</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>
+  <url><loc>https://planforge.ai/signup</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>
+</urlset>

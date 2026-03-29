@@ -13,6 +13,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { apiClientAuth } from "@/lib/api-client"
+import { useToastStore } from "@/stores/toast-store"
 import type { AgentType } from "@/types/task"
 
 const AGENTS: { id: AgentType; name: string; desc: string; color: string }[] = [
@@ -50,7 +51,7 @@ export function AgentDispatchButton({ taskId, projectId, onDispatch, disabled }:
       setOpen(false)
       setTimeout(() => setDispatched(false), 3000)
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to dispatch task. The backend endpoint may not be available yet.")
+      useToastStore.getState().addToast(err instanceof Error ? err.message : "Failed to dispatch task. The backend endpoint may not be available yet.", "error")
     } finally {
       setDispatching(false)
     }

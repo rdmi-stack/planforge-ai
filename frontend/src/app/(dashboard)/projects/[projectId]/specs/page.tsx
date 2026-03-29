@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils"
 import { EmptyState } from "@/components/shared/empty-state"
 import { PageSkeleton } from "@/components/shared/loading-skeleton"
 import { apiClientAuth } from "@/lib/api-client"
+import { useToastStore } from "@/stores/toast-store"
 
 type BackendSpec = {
   id: string
@@ -115,7 +116,7 @@ export default function SpecsPage() {
       setNewTitle("")
       router.push(`/projects/${projectId}/specs/${result.id}`)
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to create spec")
+      useToastStore.getState().addToast(err instanceof Error ? err.message : "Failed to create spec", "error")
     } finally {
       setCreating(false)
     }
@@ -131,7 +132,7 @@ export default function SpecsPage() {
       })
       router.push(`/projects/${projectId}/specs/${result.id}`)
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to generate spec")
+      useToastStore.getState().addToast(err instanceof Error ? err.message : "Failed to generate spec", "error")
     } finally {
       setGenerating(false)
     }

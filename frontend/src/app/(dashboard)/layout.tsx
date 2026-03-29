@@ -4,6 +4,7 @@ import { Sidebar } from "@/components/layout/sidebar"
 import { Header } from "@/components/layout/header"
 import { CommandPalette } from "@/components/layout/command-palette"
 import { ErrorBoundary } from "@/components/shared/error-boundary"
+import { ToastContainer } from "@/components/shared/toast-container"
 import type { ReactNode } from "react"
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
@@ -22,6 +23,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
       {/* Overlays */}
       <CommandPalette />
+      <ToastContainer />
     </div>
   )
 }

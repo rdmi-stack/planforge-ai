@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import { motion } from "framer-motion"
 import {
@@ -57,7 +57,15 @@ function mapBackendProject(p: BackendProject): Project {
 type FilterStatus = "all" | "active" | "draft" | "archived"
 type ViewMode = "grid" | "list"
 
-export default function ProjectsPage() {
+export default function ProjectsPageWrapper() {
+  return (
+    <Suspense fallback={<PageSkeleton />}>
+      <ProjectsPage />
+    </Suspense>
+  )
+}
+
+function ProjectsPage() {
   const searchParams = useSearchParams()
   const [createOpen, setCreateOpen] = useState(false)
 

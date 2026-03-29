@@ -104,6 +104,32 @@ class EmailService:
         """
         return await self.send_email(to=to, subject=subject, html=html)
 
+    async def send_verification_email(self, to: str, name: str, verify_url: str) -> bool:
+        """Send email verification link to new user."""
+        subject = "Verify your PlanForge email"
+        html = f"""
+        <div style="font-family: Inter, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+            <div style="margin-bottom: 30px;">
+                <strong style="font-size: 20px; color: #1A3A2A;">PlanForge</strong>
+            </div>
+            <h1 style="font-size: 24px; color: #0F1729; margin-bottom: 16px;">Verify your email</h1>
+            <p style="color: #6B7280; line-height: 1.6; margin-bottom: 8px;">Hi {name},</p>
+            <p style="color: #6B7280; line-height: 1.6; margin-bottom: 24px;">
+                Thanks for signing up for PlanForge AI! Please verify your email address by clicking
+                the button below. This link expires in 24 hours.
+            </p>
+            <a href="{verify_url}"
+               style="display: inline-block; background: #1A3A2A; color: white; padding: 12px 24px;
+                      border-radius: 8px; text-decoration: none; font-weight: 600;">
+                Verify Email
+            </a>
+            <p style="color: #9CA3AF; font-size: 12px; margin-top: 40px;">
+                If you didn't create this account, you can safely ignore this email.
+            </p>
+        </div>
+        """
+        return await self.send_email(to=to, subject=subject, html=html)
+
     async def send_agent_completion_email(
         self, to: str, name: str, project_name: str, task_title: str, status: str
     ) -> bool:

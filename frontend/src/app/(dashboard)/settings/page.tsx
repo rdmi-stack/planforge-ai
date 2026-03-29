@@ -4,6 +4,7 @@ import { useState } from "react"
 import { motion } from "framer-motion"
 import { User, Bell, Key, Globe, Shield, Save, Loader2, Check, GitBranch, Bot, Eye, EyeOff } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useToastStore } from "@/stores/toast-store"
 
 export default function SettingsPage() {
   const [saving, setSaving] = useState(false)
@@ -35,7 +36,7 @@ export default function SettingsPage() {
           <div className="space-y-4 rounded-xl border border-border bg-white p-6">
             <div className="flex items-center gap-4">
               <div className="flex h-16 w-16 items-center justify-center rounded-full bg-forest text-lg font-bold text-white">RR</div>
-              <button onClick={() => alert("Avatar upload coming soon")} className="rounded-lg border border-border px-3 py-2 text-xs font-medium text-navy hover:bg-cream transition-colors cursor-pointer">Change Avatar</button>
+              <button onClick={() => useToastStore.getState().addToast("Avatar upload coming soon", "info")} className="rounded-lg border border-border px-3 py-2 text-xs font-medium text-navy hover:bg-cream transition-colors cursor-pointer">Change Avatar</button>
             </div>
             <div>
               <label className="mb-1.5 block text-xs font-semibold text-navy">Full Name</label>
@@ -87,7 +88,7 @@ export default function SettingsPage() {
                 {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
-            <button onClick={() => { if (confirm("Are you sure you want to regenerate your API key? The current key will be invalidated.")) { alert("New API key generated successfully. (This is a placeholder — backend integration pending.)") } }} className="mt-3 text-xs font-medium text-forest hover:text-forest-light transition-colors cursor-pointer">Regenerate API Key</button>
+            <button onClick={() => { if (confirm("Are you sure you want to regenerate your API key? The current key will be invalidated.")) { useToastStore.getState().addToast("New API key generated successfully. (This is a placeholder — backend integration pending.)", "success") } }} className="mt-3 text-xs font-medium text-forest hover:text-forest-light transition-colors cursor-pointer">Regenerate API Key</button>
           </div>
         </section>
 
@@ -112,7 +113,7 @@ export default function SettingsPage() {
                     </div>
                   </div>
                   <button
-                    onClick={() => { if (!item.connected) { alert(`${item.name} integration coming soon`) } }}
+                    onClick={() => { if (!item.connected) { useToastStore.getState().addToast(`${item.name} integration coming soon`, "info") } }}
                     className={cn("rounded-lg px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer", item.connected ? "border border-success/30 text-success hover:bg-success-light/30" : "border border-border text-navy hover:bg-cream")}>
                     {item.connected ? "Connected" : "Connect"}
                   </button>

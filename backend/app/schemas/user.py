@@ -20,6 +20,7 @@ class UserResponse(BaseModel):
     id: str
     email: str
     name: str
+    email_verified: bool
     avatar_url: str | None
     plan: str
     org_id: str | None
@@ -36,3 +37,20 @@ class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: str = Field(..., max_length=255)
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str = Field(..., min_length=8, max_length=128)
+
+
+class VerifyEmailRequest(BaseModel):
+    token: str
+
+
+class MessageResponse(BaseModel):
+    message: str

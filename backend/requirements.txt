@@ -1,0 +1,16 @@
+fastapi==0.135.2
+uvicorn[standard]
+motor
+beanie
+pydantic-settings
+python-jose[cryptography]
+passlib[bcrypt]
+bcrypt
+structlog
+openai
+httpx
+instructor
+python-multipart
+jinja2
+certifi
+redis

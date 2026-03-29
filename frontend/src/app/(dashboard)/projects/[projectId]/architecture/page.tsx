@@ -6,6 +6,7 @@ import { motion } from "framer-motion"
 import { Network, Database, FileCode, Sparkles, Download, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { apiClientAuth } from "@/lib/api-client"
+import { useToastStore } from "@/stores/toast-store"
 import { ArchDiagramViewer } from "@/components/architecture/arch-diagram-viewer"
 import { SchemaDesigner } from "@/components/architecture/schema-designer"
 import { ApiContractViewer } from "@/components/architecture/api-contract-viewer"
@@ -25,9 +26,9 @@ export default function ArchitecturePage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       })
-      alert("Architecture generated successfully!")
+      useToastStore.getState().addToast("Architecture generated successfully!", "success")
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to generate architecture. The backend endpoint may not be available yet.")
+      useToastStore.getState().addToast(err instanceof Error ? err.message : "Failed to generate architecture. The backend endpoint may not be available yet.", "error")
     } finally {
       setAiGenerating(false)
     }

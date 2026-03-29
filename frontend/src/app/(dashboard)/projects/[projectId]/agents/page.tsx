@@ -6,6 +6,7 @@ import { motion } from "framer-motion"
 import { Bot, Play, Pause, BarChart3, CheckCircle2, XCircle, Clock, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { apiClientAuth } from "@/lib/api-client"
+import { useToastStore } from "@/stores/toast-store"
 import { AgentStatusCard } from "@/components/agents/agent-status-card"
 import { OrchestrationTimeline } from "@/components/agents/orchestration-timeline"
 import type { AgentRun } from "@/types/agent"
@@ -45,9 +46,9 @@ export default function AgentsPage() {
           // Individual dispatch may fail if endpoint not ready
         }
       }
-      alert(`Dispatched ${queuedTasks.length} queued task(s).`)
+      useToastStore.getState().addToast(`Dispatched ${queuedTasks.length} queued task(s).`, "success")
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to dispatch tasks")
+      useToastStore.getState().addToast(err instanceof Error ? err.message : "Failed to dispatch tasks", "error")
     } finally {
       setDispatching(false)
     }
