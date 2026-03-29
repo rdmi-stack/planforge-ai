@@ -51,7 +51,7 @@ class AIClient:
                 user_prompt=user_prompt,
                 model=model_tier.value,
                 temperature=temperature,
-                max_tokens=max_tokens,
+                max_completion_tokens=max_tokens,
             )
         except Exception as e:
             logger.warning("openai_generation_failed", error=str(e), model=model_tier.value)
@@ -60,7 +60,7 @@ class AIClient:
                 user_prompt=user_prompt,
                 model=ModelTier.FAST.value,
                 temperature=temperature,
-                max_tokens=max_tokens,
+                max_completion_tokens=max_tokens,
             )
 
     async def stream(
@@ -81,7 +81,7 @@ class AIClient:
                 user_prompt=user_prompt,
                 model=model_tier.value,
                 temperature=temperature,
-                max_tokens=max_tokens,
+                max_completion_tokens=max_tokens,
             ):
                 yield chunk
         except Exception as e:
@@ -91,7 +91,7 @@ class AIClient:
                 user_prompt=user_prompt,
                 model=ModelTier.FAST.value,
                 temperature=temperature,
-                max_tokens=max_tokens,
+                max_completion_tokens=max_tokens,
             ):
                 yield chunk
 
@@ -106,7 +106,7 @@ class AIClient:
         response = await self._openai.chat.completions.create(
             model=model,
             temperature=temperature,
-            max_tokens=max_tokens,
+            max_completion_tokens=max_tokens,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
@@ -133,7 +133,7 @@ class AIClient:
         stream = await self._openai.chat.completions.create(
             model=model,
             temperature=temperature,
-            max_tokens=max_tokens,
+            max_completion_tokens=max_tokens,
             stream=True,
             messages=[
                 {"role": "system", "content": system_prompt},

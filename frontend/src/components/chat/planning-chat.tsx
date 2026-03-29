@@ -93,9 +93,7 @@ export function PlanningChat({ projectId }: PlanningChatProps) {
     try {
       const token = await getAuthToken()
 
-      const chatMessages = updatedMessages
-        .filter((m) => m.role === "user" || m.role === "assistant")
-        .map((m) => ({ role: m.role, content: m.content }))
+      const lastUserMessage = content.trim()
 
       const res = await fetch(`${API_BASE}/api/v1/projects/${projectId}/chat`, {
         method: "POST",
@@ -104,13 +102,14 @@ export function PlanningChat({ projectId }: PlanningChatProps) {
           Accept: "text/event-stream",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ messages: chatMessages }),
+        body: JSON.stringify({ message: lastUserMessage }),
         signal: abortController.signal,
       })
 
       if (!res.ok) {
-        const errData = await res.json().catch(() => ({}))
-        throw new Error(errData.detail || `Request failed (${res.status})`)
+        const errData = await res.json().catch(() => null)
+        const detail = typeof errData?.detail === "string" ? errData.detail : `Request failed (${res.status})`
+        throw new Error(detail)
       }
 
       const reader = res.body?.getReader()
@@ -135,6 +134,10 @@ export function PlanningChat({ projectId }: PlanningChatProps) {
 
             try {
               const parsed = JSON.parse(dataStr)
+              if (parsed.type === "error") {
+                throw new Error(parsed.content || "AI generation failed")
+              }
+              if (parsed.type === "done") continue
               if (parsed.content) {
                 accumulated += parsed.content
                 const currentContent = accumulated
@@ -150,8 +153,11 @@ export function PlanningChat({ projectId }: PlanningChatProps) {
                   return updated
                 })
               }
-            } catch {
-              // Skip malformed SSE data lines
+            } catch (parseErr) {
+              if (parseErr instanceof Error && parseErr.message !== "AI generation failed") {
+                continue // Skip malformed SSE data lines
+              }
+              throw parseErr
             }
           }
         }

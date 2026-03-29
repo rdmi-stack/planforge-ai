@@ -44,7 +44,7 @@ async def _generate_ai_stream(
 
         stream = await client.chat.completions.create(
             model="gpt-5.4",
-            max_tokens=4096,
+            max_completion_tokens=4096,
             stream=True,
             messages=[
                 {"role": "system", "content": system_prompt},
