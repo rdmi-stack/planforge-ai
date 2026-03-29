@@ -15,10 +15,12 @@ import {
   Lightbulb,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { apiClientAuth } from "@/lib/api-client"
 
 type CreateProjectDialogProps = {
   open: boolean
   onClose: () => void
+  onCreated?: () => void
 }
 
 const TEMPLATES = [
@@ -38,7 +40,7 @@ const TECH_OPTIONS = [
   "Docker", "AWS", "Vercel", "Railway",
 ]
 
-export function CreateProjectDialog({ open, onClose }: CreateProjectDialogProps) {
+export function CreateProjectDialog({ open, onClose, onCreated }: CreateProjectDialogProps) {
   const [step, setStep] = useState(1)
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
@@ -46,6 +48,7 @@ export function CreateProjectDialog({ open, onClose }: CreateProjectDialogProps)
   const [techStack, setTechStack] = useState<string[]>([])
   const [githubUrl, setGithubUrl] = useState("")
   const [loading, setLoading] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
   const totalSteps = 3
 
@@ -57,10 +60,27 @@ export function CreateProjectDialog({ open, onClose }: CreateProjectDialogProps)
 
   const handleCreate = async () => {
     setLoading(true)
-    await new Promise((r) => setTimeout(r, 1500))
-    setLoading(false)
-    onClose()
-    resetForm()
+    setErrorMsg(null)
+    try {
+      await apiClientAuth("/projects", {
+        method: "POST",
+        body: JSON.stringify({
+          name,
+          description: description || undefined,
+          github_repo_url: githubUrl || undefined,
+          tech_stack: techStack.length > 0 ? techStack : undefined,
+        }),
+        headers: { "Content-Type": "application/json" },
+      })
+      onClose()
+      resetForm()
+      onCreated?.()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to create project"
+      setErrorMsg(message)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const resetForm = () => {
@@ -309,6 +329,13 @@ export function CreateProjectDialog({ open, onClose }: CreateProjectDialogProps)
                 )}
               </AnimatePresence>
             </div>
+
+            {/* Error message */}
+            {errorMsg && (
+              <div className="mx-6 mb-2 rounded-lg bg-danger/10 px-4 py-2 text-xs font-medium text-danger">
+                {errorMsg}
+              </div>
+            )}
 
             {/* Footer */}
             <div className="flex items-center justify-between border-t border-border px-6 py-4">

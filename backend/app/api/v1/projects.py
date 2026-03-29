@@ -44,19 +44,13 @@ async def create_project(
     data: ProjectCreate,
     user: User = Depends(get_current_user),
 ) -> Project:
-    if user.org_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User must belong to an organization to create projects",
-        )
-
     project = Project(
-        org_id=user.org_id,
-        owner_id=user.id,
+        org_id=user.org_id or str(user.id),
+        owner_id=str(user.id),
         name=data.name,
         description=data.description,
         github_repo_url=data.github_repo_url,
-        tech_stack_json=data.tech_stack_json,
+        tech_stack=data.tech_stack,
     )
     await project.insert()
     logger.info("project_created", project_id=str(project.id), user_id=str(user.id))

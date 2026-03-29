@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
+import { useParams } from "next/navigation"
 import { motion } from "framer-motion"
 import {
   Layers,
@@ -16,87 +17,81 @@ import { FeatureTree } from "@/components/features/feature-tree"
 import { FeatureCard } from "@/components/features/feature-card"
 import { PrioritizationMatrix } from "@/components/features/prioritization-matrix"
 import { DependencyGraph } from "@/components/features/dependency-graph"
+import { EmptyState } from "@/components/shared/empty-state"
+import { PageSkeleton } from "@/components/shared/loading-skeleton"
+import { apiClientAuth } from "@/lib/api-client"
 import type { Feature } from "@/types/feature"
 
-const DEMO_FEATURES: Feature[] = [
-  {
-    id: "f1", projectId: "p1", specId: "s1", title: "Authentication & Authorization",
-    description: "OAuth 2.0, email/password, RBAC with org-level permissions", priorityScore: 95,
-    effortEstimate: 40, status: "done", parentFeatureId: null, sortOrder: 1,
-    mvpClassification: "mvp", dependencies: [], createdAt: "", updatedAt: "",
-    childFeatures: [
-      { id: "f1-1", projectId: "p1", specId: "s1", title: "Google OAuth Provider", description: "", priorityScore: 90, effortEstimate: 8, status: "done", parentFeatureId: "f1", sortOrder: 1, mvpClassification: "mvp", dependencies: [], childFeatures: [], createdAt: "", updatedAt: "" },
-      { id: "f1-2", projectId: "p1", specId: "s1", title: "GitHub OAuth Provider", description: "", priorityScore: 85, effortEstimate: 8, status: "done", parentFeatureId: "f1", sortOrder: 2, mvpClassification: "mvp", dependencies: [], childFeatures: [], createdAt: "", updatedAt: "" },
-      { id: "f1-3", projectId: "p1", specId: "s1", title: "Role-Based Access Control", description: "", priorityScore: 88, effortEstimate: 16, status: "in_progress", parentFeatureId: "f1", sortOrder: 3, mvpClassification: "mvp", dependencies: ["f1-1"], childFeatures: [], createdAt: "", updatedAt: "" },
-    ],
-  },
-  {
-    id: "f2", projectId: "p1", specId: "s1", title: "AI Planning Engine",
-    description: "Natural language planning chat with smart questions and spec generation", priorityScore: 92,
-    effortEstimate: 60, status: "in_progress", parentFeatureId: null, sortOrder: 2,
-    mvpClassification: "mvp", dependencies: ["f1"], createdAt: "", updatedAt: "",
-    childFeatures: [
-      { id: "f2-1", projectId: "p1", specId: "s1", title: "Planning Chat Interface", description: "", priorityScore: 90, effortEstimate: 20, status: "in_progress", parentFeatureId: "f2", sortOrder: 1, mvpClassification: "mvp", dependencies: [], childFeatures: [], createdAt: "", updatedAt: "" },
-      { id: "f2-2", projectId: "p1", specId: "s1", title: "Smart Question Engine", description: "", priorityScore: 85, effortEstimate: 15, status: "planned", parentFeatureId: "f2", sortOrder: 2, mvpClassification: "mvp", dependencies: ["f2-1"], childFeatures: [], createdAt: "", updatedAt: "" },
-    ],
-  },
-  {
-    id: "f3", projectId: "p1", specId: "s1", title: "Spec Generation & Editor",
-    description: "Rich text editor with AI-assisted spec writing and version control", priorityScore: 88,
-    effortEstimate: 45, status: "in_progress", parentFeatureId: null, sortOrder: 3,
-    mvpClassification: "mvp", dependencies: ["f2"], createdAt: "", updatedAt: "", childFeatures: [],
-  },
-  {
-    id: "f4", projectId: "p1", specId: "s1", title: "Feature Decomposition",
-    description: "Break epics into hierarchical features with dependency mapping", priorityScore: 82,
-    effortEstimate: 30, status: "planned", parentFeatureId: null, sortOrder: 4,
-    mvpClassification: "v1", dependencies: ["f3"], createdAt: "", updatedAt: "", childFeatures: [],
-  },
-  {
-    id: "f5", projectId: "p1", specId: "s1", title: "Task Generation & Kanban",
-    description: "Atomic task breakdown with agent-ready prompts and kanban board", priorityScore: 85,
-    effortEstimate: 35, status: "planned", parentFeatureId: null, sortOrder: 5,
-    mvpClassification: "v1", dependencies: ["f4"], createdAt: "", updatedAt: "", childFeatures: [],
-  },
-  {
-    id: "f6", projectId: "p1", specId: "s1", title: "Agent Orchestration",
-    description: "Multi-agent dispatch, parallel execution, validation, and retry", priorityScore: 78,
-    effortEstimate: 50, status: "backlog", parentFeatureId: null, sortOrder: 6,
-    mvpClassification: "v1", dependencies: ["f5"], createdAt: "", updatedAt: "", childFeatures: [],
-  },
-  {
-    id: "f7", projectId: "p1", specId: "s1", title: "Billing & Subscriptions",
-    description: "Stripe integration with usage-based billing and plan management", priorityScore: 70,
-    effortEstimate: 25, status: "backlog", parentFeatureId: null, sortOrder: 7,
-    mvpClassification: "v1", dependencies: ["f1"], createdAt: "", updatedAt: "", childFeatures: [],
-  },
-  {
-    id: "f8", projectId: "p1", specId: "s1", title: "Codebase Analysis",
-    description: "GitHub repo connection with architecture and convention detection", priorityScore: 65,
-    effortEstimate: 40, status: "backlog", parentFeatureId: null, sortOrder: 8,
-    mvpClassification: "v2", dependencies: ["f2"], createdAt: "", updatedAt: "", childFeatures: [],
-  },
-  {
-    id: "f9", projectId: "p1", specId: "s1", title: "Real-time Collaboration",
-    description: "WebSocket-based multi-user editing and presence indicators", priorityScore: 50,
-    effortEstimate: 45, status: "backlog", parentFeatureId: null, sortOrder: 9,
-    mvpClassification: "v2", dependencies: ["f3"], createdAt: "", updatedAt: "", childFeatures: [],
-  },
-  {
-    id: "f10", projectId: "p1", specId: "s1", title: "Production Readiness Audit",
-    description: "12-point audit with security, performance, and error handling checks", priorityScore: 55,
-    effortEstimate: 20, status: "backlog", parentFeatureId: null, sortOrder: 10,
-    mvpClassification: "v2", dependencies: ["f6"], createdAt: "", updatedAt: "", childFeatures: [],
-  },
-]
+type BackendFeature = {
+  id: string
+  project_id: string
+  spec_id: string | null
+  title: string
+  description: string
+  priority_score: number
+  effort_estimate: number | null
+  status: string
+  parent_feature_id: string | null
+  sort_order: number
+  mvp_classification: string
+  dependencies: string[]
+  child_features?: BackendFeature[]
+  created_at: string
+  updated_at: string
+}
+
+function mapBackendFeature(f: BackendFeature): Feature {
+  return {
+    id: f.id,
+    projectId: f.project_id ?? "",
+    specId: f.spec_id,
+    title: f.title,
+    description: f.description ?? "",
+    priorityScore: f.priority_score ?? 0,
+    effortEstimate: f.effort_estimate,
+    status: (f.status as Feature["status"]) ?? "backlog",
+    parentFeatureId: f.parent_feature_id,
+    sortOrder: f.sort_order ?? 0,
+    mvpClassification: (f.mvp_classification as Feature["mvpClassification"]) ?? "v1",
+    dependencies: f.dependencies ?? [],
+    childFeatures: (f.child_features ?? []).map(mapBackendFeature),
+    createdAt: f.created_at ?? "",
+    updatedAt: f.updated_at ?? "",
+  }
+}
 
 type ViewMode = "tree" | "cards" | "matrix" | "graph"
 
 export default function FeaturesPage() {
+  const params = useParams()
+  const projectId = params.projectId as string
+
   const [viewMode, setViewMode] = useState<ViewMode>("tree")
   const [selectedFeature, setSelectedFeature] = useState<Feature | null>(null)
+  const [features, setFeatures] = useState<Feature[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const allFeatures = DEMO_FEATURES.flatMap((f) => [f, ...f.childFeatures])
+  const fetchFeatures = useCallback(async () => {
+    try {
+      setError(null)
+      const data = await apiClientAuth<BackendFeature[] | { data: BackendFeature[] }>(
+        `/projects/${projectId}/features`
+      )
+      const list = Array.isArray(data) ? data : (data.data ?? [])
+      setFeatures(list.map(mapBackendFeature))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load features")
+    } finally {
+      setLoading(false)
+    }
+  }, [projectId])
+
+  useEffect(() => {
+    fetchFeatures()
+  }, [fetchFeatures])
+
+  const allFeatures = features.flatMap((f) => [f, ...f.childFeatures])
 
   const views: { id: ViewMode; label: string; icon: React.ElementType }[] = [
     { id: "tree", label: "Tree", icon: TreePine },
@@ -105,6 +100,48 @@ export default function FeaturesPage() {
     { id: "graph", label: "Graph", icon: Network },
   ]
 
+  if (loading) {
+    return <PageSkeleton />
+  }
+
+  if (error) {
+    return (
+      <div className="p-6 sm:p-8">
+        <div className="rounded-xl border border-danger/20 bg-danger/5 p-6 text-center">
+          <p className="text-sm font-medium text-danger">{error}</p>
+          <button
+            onClick={() => { setLoading(true); fetchFeatures() }}
+            className="mt-3 text-xs font-medium text-danger underline hover:no-underline cursor-pointer"
+          >
+            Try again
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (features.length === 0) {
+    return (
+      <div className="p-6 sm:p-8">
+        <div className="mb-6">
+          <h1 className="text-2xl font-black tracking-tight text-navy">Features</h1>
+          <p className="mt-1 text-sm text-muted">No features yet</p>
+        </div>
+        <EmptyState
+          icon={Layers}
+          title="No features yet"
+          description="Decompose your specs into features using AI, or add them manually."
+          action={
+            <button className="flex items-center gap-2 rounded-lg bg-forest px-4 py-2.5 text-sm font-semibold text-white hover:bg-forest-light transition-colors cursor-pointer">
+              <Sparkles className="h-4 w-4" />
+              AI Decompose
+            </button>
+          }
+        />
+      </div>
+    )
+  }
+
   return (
     <div className="p-6 sm:p-8">
       {/* Header */}
@@ -112,7 +149,7 @@ export default function FeaturesPage() {
         <div>
           <h1 className="text-2xl font-black tracking-tight text-navy">Features</h1>
           <p className="mt-1 text-sm text-muted">
-            {DEMO_FEATURES.length} features &middot; {allFeatures.filter((f) => f.status === "done").length} completed
+            {features.length} features &middot; {allFeatures.filter((f) => f.status === "done").length} completed
           </p>
         </div>
         <div className="flex gap-2">
@@ -159,7 +196,7 @@ export default function FeaturesPage() {
         {viewMode === "tree" && (
           <div className="grid gap-6 lg:grid-cols-[1fr_350px]">
             <FeatureTree
-              features={DEMO_FEATURES}
+              features={features}
               onSelect={setSelectedFeature}
               selectedId={selectedFeature?.id}
             />
@@ -191,18 +228,18 @@ export default function FeaturesPage() {
 
         {viewMode === "cards" && (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {DEMO_FEATURES.map((f) => (
+            {features.map((f) => (
               <FeatureCard key={f.id} feature={f} onClick={() => setSelectedFeature(f)} />
             ))}
           </div>
         )}
 
         {viewMode === "matrix" && (
-          <PrioritizationMatrix features={DEMO_FEATURES} onSelect={setSelectedFeature} />
+          <PrioritizationMatrix features={features} onSelect={setSelectedFeature} />
         )}
 
         {viewMode === "graph" && (
-          <DependencyGraph features={DEMO_FEATURES} />
+          <DependencyGraph features={features} />
         )}
       </motion.div>
     </div>

@@ -43,6 +43,14 @@ async def register(data: UserCreate) -> User:
     )
     await user.insert()
     logger.info("user_registered", user_id=str(user.id), email=user.email)
+
+    try:
+        from app.services.email_service import EmailService
+        email_svc = EmailService()
+        await email_svc.send_welcome_email(to=user.email, name=user.name)
+    except Exception:
+        logger.warning("welcome_email_failed", email=user.email)
+
     return user
 
 

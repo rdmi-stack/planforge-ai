@@ -17,7 +17,7 @@ async def test_ask_smart_questions_returns_string() -> None:
     mock_project = MagicMock()
     mock_project.name = "Test Project"
     mock_project.description = "A test project"
-    mock_project.tech_stack_json = None
+    mock_project.tech_stack = []
 
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = mock_project
@@ -58,7 +58,7 @@ async def test_chat_stream_yields_chunks() -> None:
     mock_project = MagicMock()
     mock_project.name = "Stream Test"
     mock_project.description = "Testing streaming"
-    mock_project.tech_stack_json = None
+    mock_project.tech_stack = []
 
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = mock_project

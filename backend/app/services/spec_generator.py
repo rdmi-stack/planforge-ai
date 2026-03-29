@@ -48,7 +48,7 @@ class SpecGenerator:
         prompt = template.render(
             project_name=project.name,
             project_description=project.description or "",
-            tech_stack=project.tech_stack_json,
+            tech_stack=project.tech_stack,
             target_users=target_users,
             conversation_summary=conversation_summary,
             codebase_context=codebase_context,

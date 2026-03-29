@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useParams } from "next/navigation"
 import { motion } from "framer-motion"
 import { FileText, Eye, Edit3, GitCompare, History, MessageSquare } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -37,6 +38,8 @@ const DEMO_CONTENT = `<h1>User Management & Authentication</h1>
 </ul>`
 
 export default function SpecDetailPage() {
+  const params = useParams()
+  const projectId = params.projectId as string
   const [activeTab, setActiveTab] = useState<Tab>("preview")
   const [title, setTitle] = useState("User Management & Authentication")
 
@@ -102,7 +105,7 @@ export default function SpecDetailPage() {
           />
         )}
         {activeTab === "diff" && <SpecDiffViewer />}
-        {activeTab === "chat" && <PlanningChat />}
+        {activeTab === "chat" && <PlanningChat projectId={projectId} />}
       </motion.div>
     </div>
   )

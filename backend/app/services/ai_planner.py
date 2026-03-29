@@ -136,8 +136,8 @@ class AIPlannerService:
             f"Project: {project.name}",
             f"Description: {project.description or 'Not yet defined'}",
         ]
-        if project.tech_stack_json:
-            context_parts.append(f"Tech Stack: {project.tech_stack_json}")
+        if project.tech_stack:
+            context_parts.append(f"Tech Stack: {project.tech_stack}")
 
         history_text = ""
         for msg in conversation_history[-10:]:

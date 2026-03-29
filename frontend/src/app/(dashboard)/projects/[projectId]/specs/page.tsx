@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
+import { useParams } from "next/navigation"
 import Link from "next/link"
 import { motion } from "framer-motion"
 import {
@@ -18,8 +19,22 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { EmptyState } from "@/components/shared/empty-state"
+import { PageSkeleton } from "@/components/shared/loading-skeleton"
+import { apiClientAuth } from "@/lib/api-client"
 
-type DemoSpec = {
+type BackendSpec = {
+  id: string
+  project_id: string
+  title: string
+  content: Record<string, unknown> | null
+  status: string
+  version: number
+  parent_spec_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+type DisplaySpec = {
   id: string
   title: string
   status: "draft" | "in_review" | "approved"
@@ -29,35 +44,22 @@ type DemoSpec = {
   wordCount: number
 }
 
-const DEMO_SPECS: DemoSpec[] = [
-  {
-    id: "spec-1",
-    title: "User Management & Authentication",
-    status: "approved",
-    version: 3,
-    updatedAt: "2026-03-28T10:00:00Z",
-    sections: 8,
-    wordCount: 2450,
-  },
-  {
-    id: "spec-2",
-    title: "Billing & Subscription System",
-    status: "in_review",
-    version: 2,
-    updatedAt: "2026-03-27T15:30:00Z",
-    sections: 6,
-    wordCount: 1820,
-  },
-  {
-    id: "spec-3",
-    title: "Real-time Collaboration Engine",
-    status: "draft",
-    version: 1,
-    updatedAt: "2026-03-26T09:00:00Z",
-    sections: 4,
-    wordCount: 980,
-  },
-]
+function mapBackendSpec(s: BackendSpec): DisplaySpec {
+  const content = s.content ?? {}
+  const contentStr = JSON.stringify(content)
+  const wordCount = contentStr.split(/\s+/).length
+  const sections = Object.keys(content).length
+
+  return {
+    id: s.id,
+    title: s.title,
+    status: (s.status as DisplaySpec["status"]) ?? "draft",
+    version: s.version ?? 1,
+    updatedAt: s.updated_at,
+    sections,
+    wordCount,
+  }
+}
 
 const STATUS_MAP = {
   draft: { label: "Draft", color: "bg-amber-50 text-amber-600 ring-amber-200" },
@@ -66,11 +68,56 @@ const STATUS_MAP = {
 }
 
 export default function SpecsPage() {
-  const [search, setSearch] = useState("")
+  const params = useParams()
+  const projectId = params.projectId as string
 
-  const filtered = DEMO_SPECS.filter((s) =>
+  const [search, setSearch] = useState("")
+  const [specs, setSpecs] = useState<DisplaySpec[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const fetchSpecs = useCallback(async () => {
+    try {
+      setError(null)
+      const data = await apiClientAuth<BackendSpec[] | { data: BackendSpec[] }>(
+        `/projects/${projectId}/specs`
+      )
+      const list = Array.isArray(data) ? data : (data.data ?? [])
+      setSpecs(list.map(mapBackendSpec))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load specs")
+    } finally {
+      setLoading(false)
+    }
+  }, [projectId])
+
+  useEffect(() => {
+    fetchSpecs()
+  }, [fetchSpecs])
+
+  const filtered = specs.filter((s) =>
     s.title.toLowerCase().includes(search.toLowerCase())
   )
+
+  if (loading) {
+    return <PageSkeleton />
+  }
+
+  if (error) {
+    return (
+      <div className="p-6 sm:p-8">
+        <div className="rounded-xl border border-danger/20 bg-danger/5 p-6 text-center">
+          <p className="text-sm font-medium text-danger">{error}</p>
+          <button
+            onClick={() => { setLoading(true); fetchSpecs() }}
+            className="mt-3 text-xs font-medium text-danger underline hover:no-underline cursor-pointer"
+          >
+            Try again
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="p-6 sm:p-8">
@@ -79,7 +126,7 @@ export default function SpecsPage() {
         <div>
           <h1 className="text-2xl font-black tracking-tight text-navy">Specs</h1>
           <p className="mt-1 text-sm text-muted">
-            {DEMO_SPECS.length} specifications &middot; Product requirements and architecture docs
+            {specs.length} specifications &middot; Product requirements and architecture docs
           </p>
         </div>
         <div className="flex gap-2">
@@ -110,7 +157,7 @@ export default function SpecsPage() {
       {filtered.length > 0 ? (
         <div className="space-y-3">
           {filtered.map((spec, i) => {
-            const statusConfig = STATUS_MAP[spec.status]
+            const statusConfig = STATUS_MAP[spec.status] ?? STATUS_MAP.draft
             return (
               <motion.div
                 key={spec.id}
@@ -176,13 +223,19 @@ export default function SpecsPage() {
       ) : (
         <EmptyState
           icon={FileText}
-          title="No specs yet"
-          description="Create a spec manually or let AI generate one from your project description."
+          title={search ? "No specs found" : "No specs yet"}
+          description={
+            search
+              ? `No specs matching "${search}".`
+              : "Create a spec manually or let AI generate one from your project description."
+          }
           action={
-            <button className="flex items-center gap-2 rounded-lg bg-forest px-4 py-2.5 text-sm font-semibold text-white hover:bg-forest-light transition-colors cursor-pointer">
-              <Sparkles className="h-4 w-4" />
-              Generate with AI
-            </button>
+            !search ? (
+              <button className="flex items-center gap-2 rounded-lg bg-forest px-4 py-2.5 text-sm font-semibold text-white hover:bg-forest-light transition-colors cursor-pointer">
+                <Sparkles className="h-4 w-4" />
+                Generate with AI
+              </button>
+            ) : undefined
           }
         />
       )}

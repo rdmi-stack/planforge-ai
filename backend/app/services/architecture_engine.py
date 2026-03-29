@@ -53,7 +53,7 @@ class ArchitectureEngine:
         prompt = template.render(
             project_name=project.name,
             project_description=project.description or "",
-            tech_stack=project.tech_stack_json or "Not specified",
+            tech_stack=project.tech_stack or "Not specified",
             spec_summary=spec_summary[:4000],
             features=[
                 {"title": f.title, "description": f.description or ""}

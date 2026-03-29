@@ -59,7 +59,7 @@ class TaskGenerator:
         template = self.jinja_env.get_template("task_prompt.j2")
         prompt = template.render(
             project_name=project.name,
-            tech_stack=project.tech_stack_json or "Not specified",
+            tech_stack=project.tech_stack or "Not specified",
             feature_title=feature.title,
             feature_description=feature.description,
             user_stories=[],

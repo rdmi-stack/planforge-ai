@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { motion } from "framer-motion"
 import {
   Plus,
@@ -10,96 +10,48 @@ import {
   List,
   FolderKanban,
   ArrowUpDown,
+  Loader2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ProjectCard } from "@/components/projects/project-card"
 import { CreateProjectDialog } from "@/components/projects/create-project-dialog"
 import { EmptyState } from "@/components/shared/empty-state"
+import { PageSkeleton } from "@/components/shared/loading-skeleton"
 import { useDebounce } from "@/hooks/use-debounce"
+import { apiClientAuth } from "@/lib/api-client"
 import type { Project } from "@/types/project"
 
-const DEMO_PROJECTS: Project[] = [
-  {
-    id: "proj-1",
-    name: "PlanForge AI",
-    description: "AI-powered product planning platform with multi-agent orchestration, spec generation, and codebase awareness.",
-    status: "active",
-    githubRepoUrl: "https://github.com/planforge/planforge",
-    techStack: ["Next.js", "FastAPI", "PostgreSQL", "Tailwind", "Redis"],
-    orgId: "org-1",
-    ownerId: "user-1",
-    specCount: 3,
-    featureCount: 18,
-    taskCount: 47,
-    completedTaskCount: 32,
-    createdAt: "2026-02-15T10:00:00Z",
-    updatedAt: "2026-03-28T14:30:00Z",
-  },
-  {
-    id: "proj-2",
-    name: "FinTrack Dashboard",
-    description: "Personal finance tracking app with bank sync, budgeting, and AI insights.",
-    status: "active",
-    githubRepoUrl: "https://github.com/user/fintrack",
-    techStack: ["React", "Supabase", "Tailwind", "Plaid API"],
-    orgId: "org-1",
-    ownerId: "user-1",
-    specCount: 2,
-    featureCount: 12,
-    taskCount: 28,
-    completedTaskCount: 28,
-    createdAt: "2026-01-10T08:00:00Z",
-    updatedAt: "2026-03-20T09:15:00Z",
-  },
-  {
-    id: "proj-3",
-    name: "DevHire Platform",
-    description: "Technical hiring platform with AI screening, live coding challenges, and team collaboration.",
-    status: "active",
-    githubRepoUrl: null,
-    techStack: ["Next.js", "Prisma", "PostgreSQL", "OpenAI"],
-    orgId: "org-1",
-    ownerId: "user-1",
-    specCount: 1,
-    featureCount: 8,
-    taskCount: 15,
-    completedTaskCount: 3,
-    createdAt: "2026-03-01T12:00:00Z",
-    updatedAt: "2026-03-27T16:45:00Z",
-  },
-  {
-    id: "proj-4",
-    name: "Content Engine",
-    description: "AI content generation and management system for marketing teams.",
-    status: "draft",
-    githubRepoUrl: null,
-    techStack: ["Vue", "Django", "MongoDB"],
-    orgId: "org-1",
-    ownerId: "user-1",
+type BackendProject = {
+  id: string
+  name: string
+  description: string | null
+  status: string
+  owner_id: string
+  org_id: string
+  tech_stack: string[] | null
+  github_repo_url: string | null
+  created_at: string
+  updated_at: string
+}
+
+function mapBackendProject(p: BackendProject): Project {
+  return {
+    id: p.id,
+    name: p.name,
+    description: p.description,
+    status: (p.status as Project["status"]) || "active",
+    githubRepoUrl: p.github_repo_url,
+    techStack: p.tech_stack ?? [],
+    orgId: p.org_id ?? "",
+    ownerId: p.owner_id ?? "",
     specCount: 0,
     featureCount: 0,
     taskCount: 0,
     completedTaskCount: 0,
-    createdAt: "2026-03-25T11:00:00Z",
-    updatedAt: "2026-03-25T11:00:00Z",
-  },
-  {
-    id: "proj-5",
-    name: "E-commerce Starter",
-    description: "Multi-vendor marketplace template with Stripe Connect, inventory management, and admin dashboard.",
-    status: "archived",
-    githubRepoUrl: "https://github.com/user/ecom",
-    techStack: ["Next.js", "Stripe", "PostgreSQL"],
-    orgId: "org-1",
-    ownerId: "user-1",
-    specCount: 2,
-    featureCount: 14,
-    taskCount: 35,
-    completedTaskCount: 35,
-    createdAt: "2025-11-01T10:00:00Z",
-    updatedAt: "2026-01-15T08:00:00Z",
-  },
-]
+    createdAt: p.created_at,
+    updatedAt: p.updated_at,
+  }
+}
 
 type FilterStatus = "all" | "active" | "draft" | "archived"
 type ViewMode = "grid" | "list"
@@ -111,7 +63,33 @@ export default function ProjectsPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("grid")
   const debouncedSearch = useDebounce(search, 250)
 
-  const filtered = DEMO_PROJECTS.filter((p) => {
+  const [projects, setProjects] = useState<Project[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const fetchProjects = useCallback(async () => {
+    try {
+      setError(null)
+      const data = await apiClientAuth<BackendProject[] | { data: BackendProject[] }>("/projects")
+      const list = Array.isArray(data) ? data : (data.data ?? [])
+      setProjects(list.map(mapBackendProject))
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to load projects"
+      setError(message)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchProjects()
+  }, [fetchProjects])
+
+  const handleProjectCreated = () => {
+    fetchProjects()
+  }
+
+  const filtered = projects.filter((p) => {
     if (filterStatus !== "all" && p.status !== filterStatus) return false
     if (
       debouncedSearch &&
@@ -123,10 +101,30 @@ export default function ProjectsPage() {
   })
 
   const counts = {
-    all: DEMO_PROJECTS.length,
-    active: DEMO_PROJECTS.filter((p) => p.status === "active").length,
-    draft: DEMO_PROJECTS.filter((p) => p.status === "draft").length,
-    archived: DEMO_PROJECTS.filter((p) => p.status === "archived").length,
+    all: projects.length,
+    active: projects.filter((p) => p.status === "active").length,
+    draft: projects.filter((p) => p.status === "draft").length,
+    archived: projects.filter((p) => p.status === "archived").length,
+  }
+
+  if (loading) {
+    return <PageSkeleton />
+  }
+
+  if (error) {
+    return (
+      <div className="p-6 sm:p-8">
+        <div className="rounded-xl border border-danger/20 bg-danger/5 p-6 text-center">
+          <p className="text-sm font-medium text-danger">{error}</p>
+          <button
+            onClick={() => { setLoading(true); fetchProjects() }}
+            className="mt-3 text-xs font-medium text-danger underline hover:no-underline cursor-pointer"
+          >
+            Try again
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -138,7 +136,7 @@ export default function ProjectsPage() {
             Projects
           </h1>
           <p className="mt-1 text-sm text-muted">
-            {DEMO_PROJECTS.length} projects &middot; {DEMO_PROJECTS.reduce((a, p) => a + p.taskCount, 0)} total tasks
+            {projects.length} projects &middot; {projects.reduce((a, p) => a + p.taskCount, 0)} total tasks
           </p>
         </div>
         <button
@@ -245,7 +243,11 @@ export default function ProjectsPage() {
       )}
 
       {/* Create dialog */}
-      <CreateProjectDialog open={createOpen} onClose={() => setCreateOpen(false)} />
+      <CreateProjectDialog
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={handleProjectCreated}
+      />
     </div>
   )
 }

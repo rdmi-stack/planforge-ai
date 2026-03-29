@@ -1,5 +1,7 @@
 "use client"
 
+import { useState, useEffect } from "react"
+import { useParams } from "next/navigation"
 import { motion } from "framer-motion"
 import Link from "next/link"
 import {
@@ -21,28 +23,31 @@ import {
   Zap,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { apiClientAuth } from "@/lib/api-client"
+import { PageSkeleton } from "@/components/shared/loading-skeleton"
 
-const PROJECT = {
-  name: "PlanForge AI",
-  description: "AI-powered product planning platform with multi-agent orchestration.",
-  status: "active" as const,
-  updatedAt: "2026-03-28T14:30:00Z",
+type BackendProject = {
+  id: string
+  name: string
+  description: string | null
+  status: string
+  owner_id: string
+  org_id: string
+  tech_stack: string[] | null
+  github_repo_url: string | null
+  created_at: string
+  updated_at: string
 }
 
 const STATS = [
-  { label: "Specs", value: "3", icon: FileText, color: "text-blue-600", bg: "bg-blue-50", href: "specs" },
-  { label: "Features", value: "18", icon: Layers, color: "text-violet-600", bg: "bg-violet-50", href: "features" },
-  { label: "Tasks", value: "32/47", icon: ListChecks, color: "text-emerald-600", bg: "bg-emerald-50", href: "tasks" },
-  { label: "Agents", value: "4 active", icon: Bot, color: "text-pink-600", bg: "bg-pink-50", href: "agents" },
+  { label: "Specs", value: "0", icon: FileText, color: "text-blue-600", bg: "bg-blue-50", href: "specs" },
+  { label: "Features", value: "0", icon: Layers, color: "text-violet-600", bg: "bg-violet-50", href: "features" },
+  { label: "Tasks", value: "0", icon: ListChecks, color: "text-emerald-600", bg: "bg-emerald-50", href: "tasks" },
+  { label: "Agents", value: "0", icon: Bot, color: "text-pink-600", bg: "bg-pink-50", href: "agents" },
 ]
 
 const RECENT_ACTIVITY = [
-  { action: "Task completed", detail: "Setup auth middleware", time: "2 hours ago", icon: CheckCircle2, color: "text-success" },
-  { action: "Spec updated", detail: "User Management PRD v3", time: "4 hours ago", icon: FileText, color: "text-blue-500" },
-  { action: "Agent dispatched", detail: "Stripe webhook handler → Claude Code", time: "5 hours ago", icon: Bot, color: "text-violet-500" },
-  { action: "Feature added", detail: "Real-time notifications", time: "Yesterday", icon: Layers, color: "text-amber-500" },
-  { action: "Task blocked", detail: "OAuth callback — waiting on API key", time: "Yesterday", icon: AlertCircle, color: "text-danger" },
-  { action: "Architecture updated", detail: "Added Redis caching layer", time: "2 days ago", icon: Network, color: "text-teal-500" },
+  { action: "Project created", detail: "Waiting for specs and features", time: "Just now", icon: CheckCircle2, color: "text-success" },
 ]
 
 const QUICK_ACTIONS = [
@@ -52,7 +57,54 @@ const QUICK_ACTIONS = [
   { label: "Add Feature", desc: "Manual entry", icon: Plus, color: "bg-cream-dark text-navy" },
 ]
 
+const STATUS_DISPLAY: Record<string, { label: string; className: string }> = {
+  active: { label: "Active", className: "bg-success/10 text-success" },
+  draft: { label: "Draft", className: "bg-amber-50 text-amber-600" },
+  archived: { label: "Archived", className: "bg-gray-100 text-gray-500" },
+}
+
 export default function ProjectOverviewPage() {
+  const params = useParams()
+  const projectId = params.projectId as string
+
+  const [project, setProject] = useState<BackendProject | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    async function fetchProject() {
+      try {
+        setError(null)
+        const data = await apiClientAuth<BackendProject | { data: BackendProject }>(`/projects/${projectId}`)
+        const proj = "data" in data && data.data && typeof data.data === "object" && "id" in data.data
+          ? data.data
+          : data as BackendProject
+        setProject(proj)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load project")
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchProject()
+  }, [projectId])
+
+  if (loading) {
+    return <PageSkeleton />
+  }
+
+  if (error || !project) {
+    return (
+      <div className="p-6 sm:p-8">
+        <div className="rounded-xl border border-danger/20 bg-danger/5 p-6 text-center">
+          <p className="text-sm font-medium text-danger">{error ?? "Project not found"}</p>
+        </div>
+      </div>
+    )
+  }
+
+  const statusInfo = STATUS_DISPLAY[project.status] ?? STATUS_DISPLAY.active
+
   return (
     <div className="p-6 sm:p-8">
       {/* Header */}
@@ -61,20 +113,27 @@ export default function ProjectOverviewPage() {
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-black tracking-tight text-navy">
-                {PROJECT.name}
+                {project.name}
               </h1>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-success/10 px-2.5 py-0.5 text-[10px] font-semibold text-success">
-                <span className="h-1.5 w-1.5 rounded-full bg-success" />
-                Active
+              <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-semibold", statusInfo.className)}>
+                <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                {statusInfo.label}
               </span>
             </div>
-            <p className="mt-1 max-w-lg text-sm text-muted">{PROJECT.description}</p>
+            <p className="mt-1 max-w-lg text-sm text-muted">{project.description ?? "No description"}</p>
           </div>
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 rounded-lg border border-border bg-white px-3 py-2 text-xs text-muted">
-              <GitBranch className="h-3.5 w-3.5 text-success" />
-              Connected
-            </div>
+            {project.github_repo_url ? (
+              <div className="flex items-center gap-1.5 rounded-lg border border-border bg-white px-3 py-2 text-xs text-muted">
+                <GitBranch className="h-3.5 w-3.5 text-success" />
+                Connected
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 rounded-lg border border-border bg-white px-3 py-2 text-xs text-muted">
+                <GitBranch className="h-3.5 w-3.5 text-muted-light" />
+                No repo
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -142,16 +201,16 @@ export default function ProjectOverviewPage() {
           <div className="mt-4 rounded-xl border border-border bg-white p-5">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-sm font-bold text-navy">Overall Progress</h3>
-              <span className="text-sm font-black text-forest">68%</span>
+              <span className="text-sm font-black text-forest">0%</span>
             </div>
             <div className="mb-4 h-2 w-full overflow-hidden rounded-full bg-cream-dark">
-              <div className="h-full w-[68%] rounded-full bg-linear-to-r from-forest to-lime" />
+              <div className="h-full w-0 rounded-full bg-linear-to-r from-forest to-lime" />
             </div>
             <div className="grid grid-cols-3 gap-2 text-center">
               {[
-                { label: "Done", value: 32, color: "text-success" },
-                { label: "In Progress", value: 8, color: "text-blue-500" },
-                { label: "Remaining", value: 7, color: "text-muted" },
+                { label: "Done", value: 0, color: "text-success" },
+                { label: "In Progress", value: 0, color: "text-blue-500" },
+                { label: "Remaining", value: 0, color: "text-muted" },
               ].map((s) => (
                 <div key={s.label} className="rounded-lg bg-cream/50 py-2">
                   <div className={cn("text-lg font-black", s.color)}>{s.value}</div>
@@ -207,22 +266,19 @@ export default function ProjectOverviewPage() {
                 <TrendingUp className="h-4 w-4 text-forest" />
                 <h3 className="text-sm font-bold text-navy">Task Velocity</h3>
               </div>
-              <span className="rounded-full bg-success/10 px-2 py-0.5 text-[10px] font-semibold text-success">
-                +23% this week
+              <span className="rounded-full bg-cream-dark px-2 py-0.5 text-[10px] font-semibold text-muted">
+                No data yet
               </span>
             </div>
             {/* Chart placeholder */}
             <div className="flex h-32 items-end justify-between gap-2">
-              {[35, 48, 42, 65, 58, 72, 80].map((h, i) => (
+              {[10, 10, 10, 10, 10, 10, 10].map((h, i) => (
                 <motion.div
                   key={i}
                   initial={{ height: 0 }}
                   animate={{ height: `${h}%` }}
                   transition={{ duration: 0.5, delay: 0.5 + i * 0.05 }}
-                  className={cn(
-                    "flex-1 rounded-t-md",
-                    i === 6 ? "bg-forest" : "bg-cream-dark"
-                  )}
+                  className="flex-1 rounded-t-md bg-cream-dark"
                 />
               ))}
             </div>

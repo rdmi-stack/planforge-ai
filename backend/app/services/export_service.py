@@ -107,7 +107,7 @@ class ExportService:
                 "id": str(project.id),
                 "name": project.name,
                 "description": project.description,
-                "tech_stack": project.tech_stack_json,
+                "tech_stack": project.tech_stack,
             },
             "specs": [
                 {
@@ -165,7 +165,7 @@ class ExportService:
                 "prompt": t.prompt_text,
                 "context": {
                     "project": project.name,
-                    "tech_stack": project.tech_stack_json,
+                    "tech_stack": project.tech_stack,
                     "acceptance_criteria": t.acceptance_criteria_json,
                 },
                 "metadata": {
@@ -181,7 +181,7 @@ class ExportService:
             "project_context": {
                 "name": project.name,
                 "description": project.description,
-                "tech_stack": project.tech_stack_json,
+                "tech_stack": project.tech_stack,
             },
             "tasks": mcp_tasks,
         }

@@ -21,7 +21,7 @@ async def test_create_project(
         json={
             "name": "Test Project",
             "description": "A test project for unit tests",
-            "tech_stack_json": {"frontend": "Next.js", "backend": "FastAPI"},
+            "tech_stack": ["Next.js", "FastAPI"],
         },
     )
     assert response.status_code == 201

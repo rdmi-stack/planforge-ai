@@ -1,5 +1,4 @@
 from datetime import datetime
-from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -12,8 +11,8 @@ class AgentDispatch(BaseModel):
 class AgentRunResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: UUID
-    task_id: UUID | None
+    id: str
+    task_id: str | None
     agent_type: str
     status: str
     started_at: datetime | None

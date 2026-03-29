@@ -16,7 +16,7 @@ class Project(TimestampMixin, Document):
     description: str | None = None
     status: str = "active"
     github_repo_url: str | None = None
-    tech_stack_json: dict | None = None
+    tech_stack: list[str] = Field(default_factory=list)
 
     class Settings:
         name = "projects"

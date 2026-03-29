@@ -66,7 +66,7 @@ class ProductionChecker:
         prompt = template.render(
             project_name=project.name,
             project_description=project.description or "",
-            tech_stack=project.tech_stack_json or "Not specified",
+            tech_stack=project.tech_stack or "Not specified",
             architecture_summary=architecture_summary or "No architecture document available",
             features=[
                 {"title": f.title, "status": f.status}

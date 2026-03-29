@@ -15,7 +15,10 @@ import {
 import { cn } from "@/lib/utils"
 import { ChatMessage } from "./chat-message"
 import { SmartQuestionCard } from "./smart-question-card"
+import { getAuthToken } from "@/lib/api-client"
 import type { ChatMessage as ChatMessageType } from "@/types/agent"
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
 
 const INITIAL_MESSAGES: ChatMessageType[] = [
   {
@@ -35,7 +38,7 @@ const SMART_QUESTIONS = [
 ]
 
 type PlanningChatProps = {
-  projectId?: string
+  projectId: string
 }
 
 export function PlanningChat({ projectId }: PlanningChatProps) {
@@ -44,6 +47,7 @@ export function PlanningChat({ projectId }: PlanningChatProps) {
   const [isStreaming, setIsStreaming] = useState(false)
   const [showQuestions, setShowQuestions] = useState(true)
   const [expanded, setExpanded] = useState(false)
+  const abortControllerRef = useRef<AbortController | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
@@ -52,6 +56,12 @@ export function PlanningChat({ projectId }: PlanningChatProps) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
   }, [messages])
+
+  const stopStreaming = () => {
+    abortControllerRef.current?.abort()
+    abortControllerRef.current = null
+    setIsStreaming(false)
+  }
 
   const sendMessage = async (content: string) => {
     if (!content.trim() || isStreaming) return
@@ -62,12 +72,13 @@ export function PlanningChat({ projectId }: PlanningChatProps) {
       content: content.trim(),
       timestamp: new Date().toISOString(),
     }
-    setMessages((prev) => [...prev, userMsg])
+
+    const updatedMessages = [...messages, userMsg]
+    setMessages(updatedMessages)
     setInput("")
     setShowQuestions(false)
     setIsStreaming(true)
 
-    // Simulate AI response
     const aiMsg: ChatMessageType = {
       id: `ai-${Date.now()}`,
       role: "assistant",
@@ -76,26 +87,97 @@ export function PlanningChat({ projectId }: PlanningChatProps) {
     }
     setMessages((prev) => [...prev, aiMsg])
 
-    const response =
-      "Great context! Let me think through the architecture for this.\n\nBased on what you've described, I'd recommend the following approach:\n\n**Authentication**: OAuth 2.0 with Google and GitHub providers, plus email/password as fallback. This covers both developer and non-technical user flows.\n\n**Database**: PostgreSQL for relational data with Redis for caching and real-time pub/sub.\n\n**Key Considerations**:\n• Role-based access control (owner, admin, member)\n• Webhook support for third-party integrations\n• Rate limiting on AI generation endpoints\n\nShall I proceed with generating the full spec? Or would you like to refine any of these decisions first?"
+    const abortController = new AbortController()
+    abortControllerRef.current = abortController
 
-    // Simulate streaming
-    for (let i = 0; i < response.length; i++) {
-      await new Promise((r) => setTimeout(r, 8))
+    try {
+      const token = await getAuthToken()
+
+      const chatMessages = updatedMessages
+        .filter((m) => m.role === "user" || m.role === "assistant")
+        .map((m) => ({ role: m.role, content: m.content }))
+
+      const res = await fetch(`${API_BASE}/api/v1/projects/${projectId}/chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "text/event-stream",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ messages: chatMessages }),
+        signal: abortController.signal,
+      })
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData.detail || `Request failed (${res.status})`)
+      }
+
+      const reader = res.body?.getReader()
+      if (!reader) {
+        throw new Error("No response body")
+      }
+
+      const decoder = new TextDecoder()
+      let accumulated = ""
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        const chunk = decoder.decode(value, { stream: true })
+        const lines = chunk.split("\n")
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const dataStr = line.slice(6).trim()
+            if (dataStr === "[DONE]") continue
+
+            try {
+              const parsed = JSON.parse(dataStr)
+              if (parsed.content) {
+                accumulated += parsed.content
+                const currentContent = accumulated
+                setMessages((prev) => {
+                  const updated = [...prev]
+                  const last = updated[updated.length - 1]
+                  if (last.role === "assistant") {
+                    updated[updated.length - 1] = {
+                      ...last,
+                      content: currentContent,
+                    }
+                  }
+                  return updated
+                })
+              }
+            } catch {
+              // Skip malformed SSE data lines
+            }
+          }
+        }
+      }
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        // User cancelled streaming
+        return
+      }
+
+      const errorMessage = err instanceof Error ? err.message : "Failed to get response"
       setMessages((prev) => {
         const updated = [...prev]
         const last = updated[updated.length - 1]
-        if (last.role === "assistant") {
+        if (last.role === "assistant" && !last.content) {
           updated[updated.length - 1] = {
             ...last,
-            content: response.slice(0, i + 1),
+            content: `Sorry, something went wrong: ${errorMessage}. Please try again.`,
           }
         }
         return updated
       })
+    } finally {
+      abortControllerRef.current = null
+      setIsStreaming(false)
     }
-
-    setIsStreaming(false)
   }
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -201,7 +283,7 @@ export function PlanningChat({ projectId }: PlanningChatProps) {
           {isStreaming ? (
             <button
               type="button"
-              onClick={() => setIsStreaming(false)}
+              onClick={stopStreaming}
               className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-danger text-white hover:bg-danger/90 transition-colors cursor-pointer"
             >
               <StopCircle className="h-5 w-5" />
