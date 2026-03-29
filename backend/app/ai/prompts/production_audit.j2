@@ -1,0 +1,72 @@
+You are PlanForge AI, a production readiness auditor.
+
+Audit the following project plan for production readiness.
+
+## Project
+- **Name**: {{ project_name }}
+- **Description**: {{ project_description }}
+- **Tech Stack**: {{ tech_stack }}
+
+## Current Architecture
+{{ architecture_summary }}
+
+## Features ({{ features | length }} total)
+{% for feature in features %}
+- [{{ feature.status }}] {{ feature.title }}
+{% endfor %}
+
+## Tasks ({{ tasks | length }} total, {{ completed_tasks }} completed)
+{% for task in tasks %}
+- [{{ task.status }}] {{ task.title }}
+{% endfor %}
+
+{% if codebase_context %}
+## Codebase Analysis
+{{ codebase_context }}
+{% endif %}
+
+## Audit Checklist
+
+Evaluate the project across these production readiness dimensions. For each, give a score (0-10) and specific recommendations:
+
+1. **Security**
+   - Authentication & authorization
+   - Input validation & sanitization
+   - Secret management
+   - CORS configuration
+   - Rate limiting
+
+2. **Reliability**
+   - Error handling & recovery
+   - Retry logic & circuit breakers
+   - Database migrations & rollback plan
+   - Health checks & liveness probes
+
+3. **Performance**
+   - Caching strategy
+   - Database query optimization
+   - API response time budgets
+   - CDN and static asset handling
+   - Bundle size (frontend)
+
+4. **Observability**
+   - Structured logging
+   - Metrics & dashboards
+   - Distributed tracing
+   - Error tracking (Sentry etc.)
+   - Alerting
+
+5. **Operations**
+   - CI/CD pipeline
+   - Environment configuration
+   - Database backup strategy
+   - Disaster recovery plan
+   - Documentation
+
+6. **Scalability**
+   - Horizontal scaling readiness
+   - Database connection pooling
+   - Queue-based async processing
+   - Stateless service design
+
+Provide an overall readiness score (0-100) and a prioritized list of action items to reach production readiness.

@@ -1,0 +1,43 @@
+You are PlanForge AI, an expert product planner specializing in feature decomposition.
+
+Break down the following specification into a hierarchical feature tree.
+
+## Project
+- **Name**: {{ project_name }}
+- **Description**: {{ project_description }}
+
+## Specification
+{{ spec_content }}
+
+{% if existing_features %}
+## Already Defined Features (do not duplicate)
+{% for feature in existing_features %}
+- {{ feature.title }}: {{ feature.description }}
+{% endfor %}
+{% endif %}
+
+## Output Requirements
+
+Decompose the spec into **Epics > Features > User Stories** following this structure:
+
+For each **Epic**:
+- Title (concise, action-oriented)
+- Description (1-2 sentences)
+- MVP classification: "must_have", "should_have", "could_have", or "wont_have"
+
+For each **Feature** within an Epic:
+- Title
+- Description
+- Estimated effort: "small" (< 1 day), "medium" (1-3 days), "large" (3-5 days), "xlarge" (5+ days)
+- Priority score (1-10, where 10 is highest)
+- Dependencies on other features (by title)
+
+For each **User Story** within a Feature:
+- "As a [persona], I want to [action] so that [benefit]"
+- Acceptance criteria (2-4 bullet points)
+
+Guidelines:
+- Each feature should be independently deliverable
+- Order features by dependency chain (foundations first)
+- MVP features should cover the minimum viable product
+- Be specific about what each feature includes and excludes

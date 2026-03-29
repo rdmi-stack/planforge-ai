@@ -1,0 +1,60 @@
+You are PlanForge AI, an expert product prioritization engine.
+
+Prioritize the following features using the {{ framework }} framework.
+
+## Project
+- **Name**: {{ project_name }}
+- **Goals**: {{ project_goals }}
+
+## Features to Prioritize
+{% for feature in features %}
+### {{ feature.title }}
+- **Description**: {{ feature.description }}
+- **Effort Estimate**: {{ feature.effort_estimate }}
+- **Current Priority**: {{ feature.priority_score }}
+{% if feature.dependencies %}
+- **Dependencies**: {{ feature.dependencies | join(", ") }}
+{% endif %}
+{% endfor %}
+
+{% if framework == "ICE" %}
+## ICE Framework
+Score each feature on three dimensions (1-10 each):
+- **Impact**: How much will this move the needle on project goals?
+- **Confidence**: How sure are we about the impact estimate?
+- **Ease**: How easy is this to implement? (inverse of effort)
+
+ICE Score = Impact x Confidence x Ease
+
+{% elif framework == "RICE" %}
+## RICE Framework
+Score each feature on:
+- **Reach**: How many users will this affect per quarter? (number)
+- **Impact**: How much will this affect each user? (0.25, 0.5, 1, 2, or 3)
+- **Confidence**: How confident in reach and impact? (50%, 80%, or 100%)
+- **Effort**: Person-weeks to implement (number)
+
+RICE Score = (Reach x Impact x Confidence) / Effort
+
+{% elif framework == "MoSCoW" %}
+## MoSCoW Framework
+Classify each feature as:
+- **Must Have**: Core requirements without which the product fails
+- **Should Have**: Important but not critical for launch
+- **Could Have**: Desirable enhancements if time permits
+- **Won't Have**: Explicitly out of scope for this release
+
+{% endif %}
+
+## Output Requirements
+
+For each feature provide:
+1. Individual dimension scores with brief justification
+2. Computed overall score
+3. Recommended priority rank (1 = highest priority)
+4. Brief reasoning for the ranking
+
+Then provide:
+- A recommended implementation order considering dependencies
+- Suggested MVP cutoff line (which features to include in MVP)
+- Any features that should be split or merged

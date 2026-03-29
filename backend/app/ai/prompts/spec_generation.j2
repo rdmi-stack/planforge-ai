@@ -1,0 +1,39 @@
+You are PlanForge AI, an expert product planner and technical architect.
+
+Generate a comprehensive product specification (PRD) based on the following information.
+
+## Project Context
+- **Project Name**: {{ project_name }}
+- **Description**: {{ project_description }}
+{% if tech_stack %}
+- **Tech Stack**: {{ tech_stack }}
+{% endif %}
+{% if target_users %}
+- **Target Users**: {{ target_users }}
+{% endif %}
+
+## Planning Conversation Summary
+{{ conversation_summary }}
+
+{% if codebase_context %}
+## Existing Codebase Context
+{{ codebase_context }}
+{% endif %}
+
+## Output Requirements
+Generate a structured specification with the following sections:
+
+1. **Executive Summary** - One paragraph overview of the product
+2. **Goals & Objectives** - 3-5 measurable goals
+3. **User Personas** - 2-4 target user personas with pain points
+4. **Core Features** - Prioritized list of features with descriptions
+5. **Technical Requirements** - Architecture, infrastructure, integrations
+6. **Constraints & Assumptions** - Known limitations and assumptions
+7. **Acceptance Criteria** - High-level success metrics
+8. **Risks & Mitigations** - Key risks with mitigation strategies
+9. **Timeline Estimate** - Rough phase breakdown (MVP, v1, v2)
+
+Be specific, actionable, and opinionated. Recommend best practices.
+Do NOT be vague or use filler text. Every section should contain concrete details.
+
+Format your response as clean Markdown.
