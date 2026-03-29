@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
 import { motion, AnimatePresence } from "framer-motion"
@@ -26,6 +27,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useUiStore } from "@/stores/ui-store"
+import { apiClientAuth } from "@/lib/api-client"
 
 type NavItem = {
   label: string
@@ -43,7 +45,7 @@ const PROJECT_NAV: NavItem[] = [
   { label: "Overview", href: "", icon: LayoutDashboard },
   { label: "Specs", href: "/specs", icon: FileText },
   { label: "Features", href: "/features", icon: Layers },
-  { label: "Tasks", href: "/tasks", icon: ListChecks, badge: "12" },
+  { label: "Tasks", href: "/tasks", icon: ListChecks },
   { label: "Architecture", href: "/architecture", icon: Network },
   { label: "Agents", href: "/agents", icon: Bot },
   { label: "Analytics", href: "/analytics", icon: BarChart3 },
@@ -78,10 +80,30 @@ export function Sidebar() {
   const userName = session?.user?.name || "User"
   const userInitials = getInitials(session?.user?.name)
 
+  const [projectName, setProjectName] = useState<string>("")
+  const [taskCount, setTaskCount] = useState<number>(0)
+
   // Detect if we're inside a project
   const projectMatch = pathname.match(/^\/projects\/([^/]+)/)
   const projectId = projectMatch?.[1]
   const inProject = Boolean(projectId)
+
+  // Fetch project name and task count
+  useEffect(() => {
+    if (!projectId) return
+    apiClientAuth<{ name: string } | { data: { name: string } }>(`/projects/${projectId}`)
+      .then((res) => {
+        const name = "data" in res && res.data ? (res.data as { name: string }).name : (res as { name: string }).name
+        setProjectName(name || "Project")
+      })
+      .catch(() => setProjectName("Project"))
+    apiClientAuth<unknown[]>(`/projects/${projectId}/tasks`)
+      .then((res) => {
+        const list = Array.isArray(res) ? res : ((res as { data: unknown[] }).data ?? [])
+        setTaskCount(list.length)
+      })
+      .catch(() => setTaskCount(0))
+  }, [projectId])
 
   const isActive = (href: string) => {
     if (inProject && href === "") return pathname === `/projects/${projectId}`
@@ -89,7 +111,12 @@ export function Sidebar() {
     return pathname === fullPath || pathname.startsWith(fullPath + "/")
   }
 
-  const navItems = inProject ? PROJECT_NAV : MAIN_NAV
+  const projectNav = PROJECT_NAV.map((item) =>
+    item.label === "Tasks" && taskCount > 0
+      ? { ...item, badge: String(taskCount) }
+      : item
+  )
+  const navItems = inProject ? projectNav : MAIN_NAV
 
   return (
     <aside
@@ -164,7 +191,7 @@ export function Sidebar() {
             </Link>
             <span className="text-muted-light">/</span>
             <span className="truncate text-[11px] font-semibold text-navy">
-              My SaaS App
+              {projectName || "Loading..."}
             </span>
           </div>
         )}
