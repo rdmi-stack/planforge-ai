@@ -21,7 +21,10 @@ import {
   Loader2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { getAuthToken } from "@/lib/api-client"
 import { useState } from "react"
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001"
 
 type ToolbarButtonProps = {
   icon: React.ElementType
@@ -56,6 +59,7 @@ type SpecEditorProps = {
   onSave?: (content: string) => void
   title?: string
   onTitleChange?: (title: string) => void
+  projectId?: string
 }
 
 export function SpecEditor({
@@ -63,8 +67,75 @@ export function SpecEditor({
   onSave,
   title = "",
   onTitleChange,
+  projectId,
 }: SpecEditorProps) {
   const [saving, setSaving] = useState(false)
+  const [generating, setGenerating] = useState(false)
+
+  const handleAIGenerate = async () => {
+    if (!editor || !projectId) return
+    setGenerating(true)
+    try {
+      const token = await getAuthToken()
+      const prompt = title
+        ? `Generate a comprehensive product spec for: "${title}". Include sections: Overview, User Personas, Core Features, Acceptance Criteria, Technical Architecture, and Database Schema.`
+        : "Generate a comprehensive product spec. Include sections: Overview, User Personas, Core Features, Acceptance Criteria, Technical Architecture, and Database Schema."
+
+      const res = await fetch(`${API_BASE}/api/v1/projects/${projectId}/chat/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ message: prompt }),
+      })
+
+      if (!res.ok) throw new Error("AI generation failed")
+
+      const reader = res.body?.getReader()
+      if (!reader) throw new Error("No response body")
+
+      const decoder = new TextDecoder()
+      let accumulated = ""
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        const chunk = decoder.decode(value, { stream: true })
+        for (const line of chunk.split("\n")) {
+          if (line.startsWith("data: ")) {
+            try {
+              const parsed = JSON.parse(line.slice(6).trim())
+              if (parsed.content) {
+                accumulated += parsed.content
+                editor.commands.setContent(
+                  accumulated
+                    .split("\n")
+                    .map((line) => {
+                      if (line.startsWith("# ")) return `<h1>${line.slice(2)}</h1>`
+                      if (line.startsWith("## ")) return `<h2>${line.slice(3)}</h2>`
+                      if (line.startsWith("### ")) return `<h3>${line.slice(4)}</h3>`
+                      if (line.startsWith("- ")) return `<li>${line.slice(2)}</li>`
+                      if (line.startsWith("**") && line.endsWith("**")) return `<p><strong>${line.slice(2, -2)}</strong></p>`
+                      if (line.trim() === "") return "<p></p>"
+                      return `<p>${line}</p>`
+                    })
+                    .join("")
+                )
+              }
+            } catch {
+              continue
+            }
+          }
+        }
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "AI generation failed"
+      editor.commands.setContent(`<p><em>Error: ${msg}. Please try again.</em></p>`)
+    } finally {
+      setGenerating(false)
+    }
+  }
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -190,9 +261,13 @@ export function SpecEditor({
 
         {/* Right side actions */}
         <div className="ml-auto flex items-center gap-2">
-          <button className="flex items-center gap-1.5 rounded-lg bg-forest/10 px-3 py-1.5 text-xs font-medium text-forest hover:bg-forest/15 transition-colors cursor-pointer">
-            <Sparkles className="h-3.5 w-3.5" />
-            AI Generate
+          <button
+            onClick={handleAIGenerate}
+            disabled={generating}
+            className="flex items-center gap-1.5 rounded-lg bg-forest/10 px-3 py-1.5 text-xs font-medium text-forest hover:bg-forest/15 transition-colors cursor-pointer disabled:opacity-50"
+          >
+            {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+            {generating ? "Generating..." : "AI Generate"}
           </button>
           <button
             onClick={handleSave}

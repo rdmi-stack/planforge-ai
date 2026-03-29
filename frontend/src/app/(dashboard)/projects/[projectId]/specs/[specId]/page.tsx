@@ -101,6 +101,7 @@ export default function SpecDetailPage() {
           <SpecEditor
             initialContent={DEMO_CONTENT}
             title={title}
+            projectId={projectId}
             onTitleChange={setTitle}
           />
         )}
