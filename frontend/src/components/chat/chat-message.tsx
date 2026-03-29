@@ -1,9 +1,11 @@
 "use client"
 
+import { memo, useState } from "react"
 import { motion } from "framer-motion"
 import { Sparkles, Copy, Check, ThumbsUp, ThumbsDown, RotateCcw } from "lucide-react"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 import { cn } from "@/lib/utils"
-import { useState } from "react"
 import type { ChatMessage as ChatMessageType } from "@/types/agent"
 
 type ChatMessageProps = {
@@ -11,7 +13,7 @@ type ChatMessageProps = {
   isStreaming?: boolean
 }
 
-export function ChatMessage({ message, isStreaming }: ChatMessageProps) {
+function ChatMessageInner({ message, isStreaming }: ChatMessageProps) {
   const [copied, setCopied] = useState(false)
   const isUser = message.role === "user"
   const isAssistant = message.role === "assistant"
@@ -50,8 +52,108 @@ export function ChatMessage({ message, isStreaming }: ChatMessageProps) {
               : "rounded-tl-sm bg-white border border-border text-navy"
           )}
         >
-          {/* Render content with basic markdown-like formatting */}
-          <div className="whitespace-pre-wrap">{message.content}</div>
+          {isUser ? (
+            <div className="whitespace-pre-wrap">{message.content}</div>
+          ) : (
+            <div className="prose-chat">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  h1: ({ children }) => (
+                    <h3 className="mt-4 mb-2 text-base font-bold text-navy first:mt-0">{children}</h3>
+                  ),
+                  h2: ({ children }) => (
+                    <h4 className="mt-3 mb-1.5 text-sm font-bold text-navy first:mt-0">{children}</h4>
+                  ),
+                  h3: ({ children }) => (
+                    <h5 className="mt-2 mb-1 text-sm font-semibold text-navy first:mt-0">{children}</h5>
+                  ),
+                  p: ({ children }) => (
+                    <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>
+                  ),
+                  ul: ({ children }) => (
+                    <ul className="mb-2 ml-4 list-disc space-y-0.5 last:mb-0">{children}</ul>
+                  ),
+                  ol: ({ children }) => (
+                    <ol className="mb-2 ml-4 list-decimal space-y-0.5 last:mb-0">{children}</ol>
+                  ),
+                  li: ({ children }) => (
+                    <li className="leading-relaxed">{children}</li>
+                  ),
+                  strong: ({ children }) => (
+                    <strong className="font-semibold text-navy">{children}</strong>
+                  ),
+                  em: ({ children }) => (
+                    <em className="italic text-navy/80">{children}</em>
+                  ),
+                  code: ({ className, children, ...props }) => {
+                    const isBlock = className?.includes("language-")
+                    if (isBlock) {
+                      return (
+                        <div className="my-2 overflow-hidden rounded-lg border border-border">
+                          <div className="flex items-center justify-between bg-navy px-3 py-1.5">
+                            <span className="text-[10px] font-medium text-white/50">
+                              {className?.replace("language-", "") || "code"}
+                            </span>
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(String(children))
+                              }}
+                              className="text-[10px] text-white/40 hover:text-white/70 cursor-pointer"
+                            >
+                              Copy
+                            </button>
+                          </div>
+                          <pre className="overflow-x-auto bg-navy/95 p-3 text-[12px] leading-relaxed text-white/80">
+                            <code>{children}</code>
+                          </pre>
+                        </div>
+                      )
+                    }
+                    return (
+                      <code className="rounded bg-cream-dark px-1.5 py-0.5 text-[12px] font-mono text-forest" {...props}>
+                        {children}
+                      </code>
+                    )
+                  },
+                  pre: ({ children }) => <>{children}</>,
+                  blockquote: ({ children }) => (
+                    <blockquote className="my-2 border-l-2 border-forest/30 pl-3 text-navy/70 italic">
+                      {children}
+                    </blockquote>
+                  ),
+                  a: ({ href, children }) => (
+                    <a
+                      href={href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-forest underline underline-offset-2 hover:text-forest-light"
+                    >
+                      {children}
+                    </a>
+                  ),
+                  table: ({ children }) => (
+                    <div className="my-2 overflow-x-auto rounded-lg border border-border">
+                      <table className="w-full text-xs">{children}</table>
+                    </div>
+                  ),
+                  th: ({ children }) => (
+                    <th className="border-b border-border bg-cream-dark px-3 py-1.5 text-left text-[11px] font-semibold text-navy">
+                      {children}
+                    </th>
+                  ),
+                  td: ({ children }) => (
+                    <td className="border-b border-border/50 px-3 py-1.5 text-navy/80">
+                      {children}
+                    </td>
+                  ),
+                  hr: () => <hr className="my-3 border-border" />,
+                }}
+              >
+                {message.content}
+              </ReactMarkdown>
+            </div>
+          )}
 
           {/* Streaming cursor */}
           {isStreaming && isAssistant && (
@@ -60,7 +162,7 @@ export function ChatMessage({ message, isStreaming }: ChatMessageProps) {
         </div>
 
         {/* Actions (assistant only) */}
-        {isAssistant && !isStreaming && (
+        {isAssistant && !isStreaming && message.content && (
           <div className="mt-1.5 flex items-center gap-1">
             <button
               onClick={handleCopy}
@@ -101,3 +203,5 @@ export function ChatMessage({ message, isStreaming }: ChatMessageProps) {
     </motion.div>
   )
 }
+
+export const ChatMessage = memo(ChatMessageInner)
