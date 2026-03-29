@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import { useSearchParams } from "next/navigation"
 import { motion } from "framer-motion"
 import {
   Plus,
@@ -57,7 +58,15 @@ type FilterStatus = "all" | "active" | "draft" | "archived"
 type ViewMode = "grid" | "list"
 
 export default function ProjectsPage() {
+  const searchParams = useSearchParams()
   const [createOpen, setCreateOpen] = useState(false)
+
+  // Auto-open create dialog from sidebar "New Project" or templates "Use Template"
+  useEffect(() => {
+    if (searchParams.get("new") === "true" || searchParams.get("template")) {
+      setCreateOpen(true)
+    }
+  }, [searchParams])
   const [search, setSearch] = useState("")
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all")
   const [viewMode, setViewMode] = useState<ViewMode>("grid")

@@ -12,6 +12,7 @@ import {
   Zap,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { apiClientAuth } from "@/lib/api-client"
 import type { AgentType } from "@/types/task"
 
 const AGENTS: { id: AgentType; name: string; desc: string; color: string }[] = [
@@ -23,11 +24,12 @@ const AGENTS: { id: AgentType; name: string; desc: string; color: string }[] = [
 
 type AgentDispatchButtonProps = {
   taskId: string
+  projectId?: string
   onDispatch?: (taskId: string, agent: AgentType) => void
   disabled?: boolean
 }
 
-export function AgentDispatchButton({ taskId, onDispatch, disabled }: AgentDispatchButtonProps) {
+export function AgentDispatchButton({ taskId, projectId, onDispatch, disabled }: AgentDispatchButtonProps) {
   const [open, setOpen] = useState(false)
   const [selectedAgent, setSelectedAgent] = useState<AgentType>("claude_code")
   const [dispatching, setDispatching] = useState(false)
@@ -35,12 +37,23 @@ export function AgentDispatchButton({ taskId, onDispatch, disabled }: AgentDispa
 
   const handleDispatch = async () => {
     setDispatching(true)
-    await new Promise((r) => setTimeout(r, 1500))
-    onDispatch?.(taskId, selectedAgent)
-    setDispatching(false)
-    setDispatched(true)
-    setOpen(false)
-    setTimeout(() => setDispatched(false), 3000)
+    try {
+      if (projectId) {
+        await apiClientAuth(`/projects/${projectId}/tasks/${taskId}/dispatch`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ agent_type: selectedAgent }),
+        })
+      }
+      onDispatch?.(taskId, selectedAgent)
+      setDispatched(true)
+      setOpen(false)
+      setTimeout(() => setDispatched(false), 3000)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to dispatch task. The backend endpoint may not be available yet.")
+    } finally {
+      setDispatching(false)
+    }
   }
 
   if (dispatched) {

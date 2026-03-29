@@ -1,9 +1,9 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { useParams } from "next/navigation"
+import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
-import { motion } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 import {
   FileText,
   Plus,
@@ -16,6 +16,8 @@ import {
   Sparkles,
   GitCompare,
   Archive,
+  X,
+  Loader2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { EmptyState } from "@/components/shared/empty-state"
@@ -69,12 +71,17 @@ const STATUS_MAP = {
 
 export default function SpecsPage() {
   const params = useParams()
+  const router = useRouter()
   const projectId = params.projectId as string
 
   const [search, setSearch] = useState("")
   const [specs, setSpecs] = useState<DisplaySpec[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [showNewDialog, setShowNewDialog] = useState(false)
+  const [newTitle, setNewTitle] = useState("")
+  const [creating, setCreating] = useState(false)
+  const [generating, setGenerating] = useState(false)
 
   const fetchSpecs = useCallback(async () => {
     try {
@@ -94,6 +101,41 @@ export default function SpecsPage() {
   useEffect(() => {
     fetchSpecs()
   }, [fetchSpecs])
+
+  const handleCreateSpec = async () => {
+    if (!newTitle.trim()) return
+    setCreating(true)
+    try {
+      const result = await apiClientAuth<BackendSpec>(`/projects/${projectId}/specs`, {
+        method: "POST",
+        body: JSON.stringify({ title: newTitle.trim() }),
+        headers: { "Content-Type": "application/json" },
+      })
+      setShowNewDialog(false)
+      setNewTitle("")
+      router.push(`/projects/${projectId}/specs/${result.id}`)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to create spec")
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const handleAIGenerate = async () => {
+    setGenerating(true)
+    try {
+      const result = await apiClientAuth<BackendSpec>(`/projects/${projectId}/specs`, {
+        method: "POST",
+        body: JSON.stringify({ title: "AI Generated Spec" }),
+        headers: { "Content-Type": "application/json" },
+      })
+      router.push(`/projects/${projectId}/specs/${result.id}`)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to generate spec")
+    } finally {
+      setGenerating(false)
+    }
+  }
 
   const filtered = specs.filter((s) =>
     s.title.toLowerCase().includes(search.toLowerCase())
@@ -130,11 +172,18 @@ export default function SpecsPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <button className="flex items-center gap-2 rounded-lg bg-forest/10 px-4 py-2.5 text-sm font-medium text-forest hover:bg-forest/15 transition-colors cursor-pointer">
-            <Sparkles className="h-4 w-4" />
-            AI Generate
+          <button
+            onClick={handleAIGenerate}
+            disabled={generating}
+            className="flex items-center gap-2 rounded-lg bg-forest/10 px-4 py-2.5 text-sm font-medium text-forest hover:bg-forest/15 transition-colors cursor-pointer disabled:opacity-50"
+          >
+            {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            {generating ? "Generating..." : "AI Generate"}
           </button>
-          <button className="flex items-center gap-2 rounded-lg bg-forest px-4 py-2.5 text-sm font-semibold text-white hover:bg-forest-light transition-colors cursor-pointer">
+          <button
+            onClick={() => setShowNewDialog(true)}
+            className="flex items-center gap-2 rounded-lg bg-forest px-4 py-2.5 text-sm font-semibold text-white hover:bg-forest-light transition-colors cursor-pointer"
+          >
             <Plus className="h-4 w-4" />
             New Spec
           </button>
@@ -166,15 +215,12 @@ export default function SpecsPage() {
                 transition={{ delay: i * 0.05 }}
               >
                 <Link
-                  href={`specs/${spec.id}`}
+                  href={`/projects/${projectId}/specs/${spec.id}`}
                   className="group flex items-center gap-5 rounded-xl border border-border bg-white px-5 py-4 transition-all hover:border-forest/20 hover:shadow-md"
                 >
-                  {/* Icon */}
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
                     <FileText className="h-5 w-5" />
                   </div>
-
-                  {/* Info */}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <h3 className="truncate text-sm font-bold text-navy group-hover:text-forest transition-colors">
@@ -197,23 +243,13 @@ export default function SpecsPage() {
                       </span>
                     </div>
                   </div>
-
-                  {/* Actions */}
                   <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                    <button
-                      onClick={(e) => e.preventDefault()}
-                      className="flex h-8 w-8 items-center justify-center rounded-md text-muted hover:bg-cream-dark hover:text-navy transition-colors cursor-pointer"
-                      title="View"
-                    >
+                    <span className="flex h-8 w-8 items-center justify-center rounded-md text-muted hover:bg-cream-dark hover:text-navy transition-colors">
                       <Eye className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={(e) => e.preventDefault()}
-                      className="flex h-8 w-8 items-center justify-center rounded-md text-muted hover:bg-cream-dark hover:text-navy transition-colors cursor-pointer"
-                      title="Compare versions"
-                    >
+                    </span>
+                    <span className="flex h-8 w-8 items-center justify-center rounded-md text-muted hover:bg-cream-dark hover:text-navy transition-colors">
                       <GitCompare className="h-4 w-4" />
-                    </button>
+                    </span>
                   </div>
                 </Link>
               </motion.div>
@@ -231,14 +267,85 @@ export default function SpecsPage() {
           }
           action={
             !search ? (
-              <button className="flex items-center gap-2 rounded-lg bg-forest px-4 py-2.5 text-sm font-semibold text-white hover:bg-forest-light transition-colors cursor-pointer">
-                <Sparkles className="h-4 w-4" />
-                Generate with AI
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleAIGenerate}
+                  disabled={generating}
+                  className="flex items-center gap-2 rounded-lg bg-forest px-4 py-2.5 text-sm font-semibold text-white hover:bg-forest-light transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  {generating ? "Generating..." : "Generate with AI"}
+                </button>
+                <button
+                  onClick={() => setShowNewDialog(true)}
+                  className="flex items-center gap-2 rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-navy hover:bg-cream transition-colors cursor-pointer"
+                >
+                  <Plus className="h-4 w-4" />
+                  New Spec
+                </button>
+              </div>
             ) : undefined
           }
         />
       )}
+
+      {/* New Spec Dialog */}
+      <AnimatePresence>
+        {showNewDialog && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowNewDialog(false)}
+              className="fixed inset-0 z-[100] bg-navy/30 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 8 }}
+              className="fixed left-1/2 top-1/2 z-[101] w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-border bg-white p-6 shadow-2xl"
+            >
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="text-lg font-bold text-navy">New Spec</h3>
+                <button onClick={() => setShowNewDialog(false)} className="text-muted hover:text-navy cursor-pointer">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="mb-5">
+                <label className="mb-1.5 block text-xs font-semibold text-navy">Spec Title</label>
+                <input
+                  type="text"
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  placeholder="e.g., User Authentication PRD"
+                  autoFocus
+                  onKeyDown={(e) => e.key === "Enter" && handleCreateSpec()}
+                  className="w-full rounded-xl border border-border bg-white px-4 py-3 text-sm text-navy outline-none placeholder:text-muted-light focus:border-forest/30 focus:ring-2 focus:ring-forest/10"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  onClick={() => setShowNewDialog(false)}
+                  className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-navy hover:bg-cream transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreateSpec}
+                  disabled={creating || !newTitle.trim()}
+                  className="flex items-center gap-2 rounded-lg bg-navy px-4 py-2 text-sm font-semibold text-white hover:bg-forest transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                  {creating ? "Creating..." : "Create Spec"}
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

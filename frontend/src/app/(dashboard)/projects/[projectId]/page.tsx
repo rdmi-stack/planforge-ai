@@ -50,12 +50,14 @@ const RECENT_ACTIVITY = [
   { action: "Project created", detail: "Waiting for specs and features", time: "Just now", icon: CheckCircle2, color: "text-success" },
 ]
 
-const QUICK_ACTIONS = [
-  { label: "Start AI Chat", desc: "Plan new features", icon: Sparkles, color: "bg-forest text-white" },
-  { label: "Generate Tasks", desc: "From existing specs", icon: Zap, color: "bg-navy text-white" },
-  { label: "Run Audit", desc: "Production readiness", icon: Activity, color: "bg-violet-600 text-white" },
-  { label: "Add Feature", desc: "Manual entry", icon: Plus, color: "bg-cream-dark text-navy" },
-]
+function getQuickActions(projectId: string) {
+  return [
+    { label: "Start AI Chat", desc: "Plan new features", icon: Sparkles, color: "bg-forest text-white", href: `/projects/${projectId}/specs` },
+    { label: "Generate Tasks", desc: "From existing specs", icon: Zap, color: "bg-navy text-white", href: `/projects/${projectId}/tasks` },
+    { label: "Run Audit", desc: "Production readiness", icon: Activity, color: "bg-violet-600 text-white", href: `/projects/${projectId}/architecture` },
+    { label: "Add Feature", desc: "Manual entry", icon: Plus, color: "bg-cream-dark text-navy", href: `/projects/${projectId}/features` },
+  ]
+}
 
 const STATUS_DISPLAY: Record<string, { label: string; className: string }> = {
   active: { label: "Active", className: "bg-success/10 text-success" },
@@ -177,12 +179,13 @@ export default function ProjectOverviewPage() {
         >
           <h2 className="mb-4 text-sm font-bold text-navy">Quick Actions</h2>
           <div className="space-y-2">
-            {QUICK_ACTIONS.map((action) => {
+            {getQuickActions(projectId).map((action) => {
               const Icon = action.icon
               return (
-                <button
+                <Link
                   key={action.label}
-                  className="group flex w-full items-center gap-3 rounded-xl border border-border bg-white p-4 text-left transition-all hover:border-forest/20 hover:shadow-sm cursor-pointer"
+                  href={action.href}
+                  className="group flex w-full items-center gap-3 rounded-xl border border-border bg-white p-4 text-left transition-all hover:border-forest/20 hover:shadow-sm"
                 >
                   <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", action.color)}>
                     <Icon className="h-4 w-4" />
@@ -192,7 +195,7 @@ export default function ProjectOverviewPage() {
                     <div className="text-[11px] text-muted">{action.desc}</div>
                   </div>
                   <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted-light opacity-0 transition-all group-hover:opacity-100" />
-                </button>
+                </Link>
               )
             })}
           </div>

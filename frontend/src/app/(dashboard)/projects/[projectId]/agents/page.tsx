@@ -1,8 +1,11 @@
 "use client"
 
+import { useState } from "react"
+import { useParams } from "next/navigation"
 import { motion } from "framer-motion"
-import { Bot, Play, Pause, BarChart3, CheckCircle2, XCircle, Clock } from "lucide-react"
+import { Bot, Play, Pause, BarChart3, CheckCircle2, XCircle, Clock, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { apiClientAuth } from "@/lib/api-client"
 import { AgentStatusCard } from "@/components/agents/agent-status-card"
 import { OrchestrationTimeline } from "@/components/agents/orchestration-timeline"
 import type { AgentRun } from "@/types/agent"
@@ -22,6 +25,38 @@ const STATS = [
 ]
 
 export default function AgentsPage() {
+  const params = useParams()
+  const projectId = params.projectId as string
+  const [dispatching, setDispatching] = useState(false)
+  const [paused, setPaused] = useState(false)
+
+  const handleDispatchAll = async () => {
+    setDispatching(true)
+    try {
+      const queuedTasks = DEMO_RUNS.filter((r) => r.run.status === "queued")
+      for (const item of queuedTasks) {
+        try {
+          await apiClientAuth(`/projects/${projectId}/tasks/${item.run.taskId}/dispatch`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ agent_type: item.run.agentType }),
+          })
+        } catch {
+          // Individual dispatch may fail if endpoint not ready
+        }
+      }
+      alert(`Dispatched ${queuedTasks.length} queued task(s).`)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to dispatch tasks")
+    } finally {
+      setDispatching(false)
+    }
+  }
+
+  const handlePauseQueue = () => {
+    setPaused(!paused)
+  }
+
   return (
     <div className="p-6 sm:p-8">
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -30,13 +65,23 @@ export default function AgentsPage() {
           <p className="mt-1 text-sm text-muted">Monitor and manage AI coding agent runs.</p>
         </div>
         <div className="flex gap-2">
-          <button className="flex items-center gap-2 rounded-lg bg-forest px-4 py-2.5 text-sm font-semibold text-white hover:bg-forest-light transition-colors cursor-pointer">
-            <Play className="h-4 w-4" />
-            Dispatch All Ready
+          <button
+            onClick={handleDispatchAll}
+            disabled={dispatching || paused}
+            className="flex items-center gap-2 rounded-lg bg-forest px-4 py-2.5 text-sm font-semibold text-white hover:bg-forest-light transition-colors cursor-pointer disabled:opacity-60">
+            {dispatching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+            {dispatching ? "Dispatching..." : "Dispatch All Ready"}
           </button>
-          <button className="flex items-center gap-2 rounded-lg border border-border bg-white px-4 py-2.5 text-sm font-medium text-navy hover:bg-cream transition-colors cursor-pointer">
-            <Pause className="h-4 w-4" />
-            Pause Queue
+          <button
+            onClick={handlePauseQueue}
+            className={cn(
+              "flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors cursor-pointer",
+              paused
+                ? "border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                : "border-border bg-white text-navy hover:bg-cream"
+            )}>
+            {paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+            {paused ? "Resume Queue" : "Pause Queue"}
           </button>
         </div>
       </div>

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
 import { BookTemplate, Search, Rocket, ShoppingCart, Bot, BarChart3, Users, Database, Smartphone, Globe, ArrowRight, Star, Copy } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -21,6 +22,7 @@ const TEMPLATES: Template[] = [
 const CATEGORIES = ["All", "Popular", "Data", "Consumer", "Developer", "Mobile", "Content"]
 
 export default function TemplatesPage() {
+  const router = useRouter()
   const [search, setSearch] = useState("")
   const [category, setCategory] = useState("All")
 
@@ -79,7 +81,9 @@ export default function TemplatesPage() {
               <p className="mb-4 flex-1 text-xs text-muted leading-relaxed">{template.desc}</p>
               <div className="flex items-center justify-between">
                 <span className="text-[10px] text-muted-light">{template.usedBy} projects</span>
-                <button className="flex items-center gap-1 rounded-lg bg-cream-dark px-3 py-1.5 text-[11px] font-medium text-navy hover:bg-forest/10 hover:text-forest transition-colors cursor-pointer">
+                <button
+                  onClick={() => router.push(`/projects?template=${template.id}`)}
+                  className="flex items-center gap-1 rounded-lg bg-cream-dark px-3 py-1.5 text-[11px] font-medium text-navy hover:bg-forest/10 hover:text-forest transition-colors cursor-pointer">
                   Use Template <ArrowRight className="h-3 w-3" />
                 </button>
               </div>

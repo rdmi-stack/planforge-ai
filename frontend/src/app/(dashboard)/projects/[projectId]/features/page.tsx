@@ -11,6 +11,8 @@ import {
   TreePine,
   ScatterChart,
   Network,
+  Loader2,
+  X,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { FeatureTree } from "@/components/features/feature-tree"
@@ -71,6 +73,11 @@ export default function FeaturesPage() {
   const [features, setFeatures] = useState<Feature[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [decomposing, setDecomposing] = useState(false)
+  const [showAddDialog, setShowAddDialog] = useState(false)
+  const [newFeatureTitle, setNewFeatureTitle] = useState("")
+  const [newFeatureDesc, setNewFeatureDesc] = useState("")
+  const [addingFeature, setAddingFeature] = useState(false)
 
   const fetchFeatures = useCallback(async () => {
     try {
@@ -90,6 +97,41 @@ export default function FeaturesPage() {
   useEffect(() => {
     fetchFeatures()
   }, [fetchFeatures])
+
+  const handleDecompose = async () => {
+    setDecomposing(true)
+    try {
+      await apiClientAuth(`/projects/${projectId}/features/decompose`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      })
+      await fetchFeatures()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to decompose features. The backend endpoint may not be available yet.")
+    } finally {
+      setDecomposing(false)
+    }
+  }
+
+  const handleAddFeature = async () => {
+    if (!newFeatureTitle.trim()) return
+    setAddingFeature(true)
+    try {
+      await apiClientAuth(`/projects/${projectId}/features`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: newFeatureTitle.trim(), description: newFeatureDesc.trim() }),
+      })
+      setNewFeatureTitle("")
+      setNewFeatureDesc("")
+      setShowAddDialog(false)
+      await fetchFeatures()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to add feature")
+    } finally {
+      setAddingFeature(false)
+    }
+  }
 
   const allFeatures = features.flatMap((f) => [f, ...f.childFeatures])
 
@@ -132,9 +174,12 @@ export default function FeaturesPage() {
           title="No features yet"
           description="Decompose your specs into features using AI, or add them manually."
           action={
-            <button className="flex items-center gap-2 rounded-lg bg-forest px-4 py-2.5 text-sm font-semibold text-white hover:bg-forest-light transition-colors cursor-pointer">
-              <Sparkles className="h-4 w-4" />
-              AI Decompose
+            <button
+              onClick={handleDecompose}
+              disabled={decomposing}
+              className="flex items-center gap-2 rounded-lg bg-forest px-4 py-2.5 text-sm font-semibold text-white hover:bg-forest-light transition-colors cursor-pointer disabled:opacity-60">
+              {decomposing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              {decomposing ? "Decomposing..." : "AI Decompose"}
             </button>
           }
         />
@@ -153,11 +198,16 @@ export default function FeaturesPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <button className="flex items-center gap-2 rounded-lg bg-forest/10 px-4 py-2.5 text-sm font-medium text-forest hover:bg-forest/15 transition-colors cursor-pointer">
-            <Sparkles className="h-4 w-4" />
-            AI Decompose
+          <button
+            onClick={handleDecompose}
+            disabled={decomposing}
+            className="flex items-center gap-2 rounded-lg bg-forest/10 px-4 py-2.5 text-sm font-medium text-forest hover:bg-forest/15 transition-colors cursor-pointer disabled:opacity-60">
+            {decomposing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            {decomposing ? "Decomposing..." : "AI Decompose"}
           </button>
-          <button className="flex items-center gap-2 rounded-lg bg-forest px-4 py-2.5 text-sm font-semibold text-white hover:bg-forest-light transition-colors cursor-pointer">
+          <button
+            onClick={() => setShowAddDialog(true)}
+            className="flex items-center gap-2 rounded-lg bg-forest px-4 py-2.5 text-sm font-semibold text-white hover:bg-forest-light transition-colors cursor-pointer">
             <Plus className="h-4 w-4" />
             Add Feature
           </button>
@@ -242,6 +292,44 @@ export default function FeaturesPage() {
           <DependencyGraph features={features} />
         )}
       </motion.div>
+
+      {/* Add Feature Dialog */}
+      {showAddDialog && (
+        <>
+          <div className="fixed inset-0 z-40 bg-navy/20" onClick={() => setShowAddDialog(false)} />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="w-full max-w-md rounded-xl border border-border bg-white p-6 shadow-xl"
+            >
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-base font-bold text-navy">Add Feature</h3>
+                <button onClick={() => setShowAddDialog(false)} className="text-muted hover:text-navy cursor-pointer"><X className="h-4 w-4" /></button>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-navy">Title</label>
+                  <input type="text" value={newFeatureTitle} onChange={(e) => setNewFeatureTitle(e.target.value)} placeholder="Feature title"
+                    className="w-full rounded-lg border border-border bg-white px-4 py-2.5 text-sm text-navy outline-none placeholder:text-muted-light focus:border-forest/30 focus:ring-2 focus:ring-forest/10" />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-navy">Description</label>
+                  <textarea value={newFeatureDesc} onChange={(e) => setNewFeatureDesc(e.target.value)} placeholder="Describe the feature..." rows={3}
+                    className="w-full rounded-lg border border-border bg-white px-4 py-2.5 text-sm text-navy outline-none placeholder:text-muted-light focus:border-forest/30 focus:ring-2 focus:ring-forest/10 resize-none" />
+                </div>
+              </div>
+              <div className="mt-5 flex justify-end gap-2">
+                <button onClick={() => setShowAddDialog(false)} className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-navy hover:bg-cream transition-colors cursor-pointer">Cancel</button>
+                <button onClick={handleAddFeature} disabled={addingFeature || !newFeatureTitle.trim()} className="flex items-center gap-2 rounded-lg bg-forest px-4 py-2 text-sm font-semibold text-white hover:bg-forest-light transition-colors cursor-pointer disabled:opacity-60">
+                  {addingFeature ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                  {addingFeature ? "Adding..." : "Add Feature"}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        </>
+      )}
     </div>
   )
 }

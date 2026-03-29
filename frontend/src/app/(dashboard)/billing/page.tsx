@@ -1,5 +1,6 @@
 "use client"
 
+import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
 import { CreditCard, Check, ArrowUpRight, Receipt, Download, Sparkles, TrendingUp, Zap } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -14,6 +15,7 @@ const INVOICES = [
 ]
 
 export default function BillingPage() {
+  const router = useRouter()
   const usagePct = Math.round((CURRENT_PLAN.generations.used / CURRENT_PLAN.generations.limit) * 100)
 
   return (
@@ -39,10 +41,14 @@ export default function BillingPage() {
               <p className="mt-1 text-xs text-muted">Billed monthly &middot; Next invoice Apr 1, 2026</p>
             </div>
             <div className="flex gap-2">
-              <button className="flex items-center gap-1.5 rounded-lg border border-border bg-white px-3 py-2 text-xs font-medium text-navy hover:bg-cream transition-colors cursor-pointer">
+              <button
+                onClick={() => router.push("/pricing")}
+                className="flex items-center gap-1.5 rounded-lg border border-border bg-white px-3 py-2 text-xs font-medium text-navy hover:bg-cream transition-colors cursor-pointer">
                 Change Plan
               </button>
-              <button className="flex items-center gap-1.5 rounded-lg bg-navy px-3 py-2 text-xs font-semibold text-white hover:bg-forest transition-colors cursor-pointer">
+              <button
+                onClick={() => router.push("/pricing")}
+                className="flex items-center gap-1.5 rounded-lg bg-navy px-3 py-2 text-xs font-semibold text-white hover:bg-forest transition-colors cursor-pointer">
                 <ArrowUpRight className="h-3.5 w-3.5" />
                 Upgrade to Team
               </button>
@@ -88,7 +94,7 @@ export default function BillingPage() {
                 <div className="text-[11px] text-muted">Expires 12/2028</div>
               </div>
             </div>
-            <button className="text-xs font-medium text-forest hover:text-forest-light transition-colors cursor-pointer">Update</button>
+            <button onClick={() => alert("Stripe integration coming soon")} className="text-xs font-medium text-forest hover:text-forest-light transition-colors cursor-pointer">Update</button>
           </div>
         </div>
 
@@ -108,7 +114,7 @@ export default function BillingPage() {
                 <span className="inline-flex items-center gap-1 rounded-full bg-success-light px-2 py-0.5 text-[10px] font-semibold text-success">
                   <Check className="h-3 w-3" /> {inv.status}
                 </span>
-                <button className="text-muted-light hover:text-navy transition-colors cursor-pointer"><Download className="h-3.5 w-3.5" /></button>
+                <button onClick={() => alert("Download coming soon")} className="text-muted-light hover:text-navy transition-colors cursor-pointer"><Download className="h-3.5 w-3.5" /></button>
               </div>
             </div>
           ))}

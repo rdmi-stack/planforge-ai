@@ -1,6 +1,6 @@
 "use client"
 
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
 import { motion, AnimatePresence } from "framer-motion"
 import { useSession, signOut } from "next-auth/react"
@@ -66,9 +66,14 @@ function getInitials(name: string | null | undefined): string {
 
 export function Sidebar() {
   const pathname = usePathname()
+  const router = useRouter()
   const { data: session } = useSession()
   const { sidebarCollapsed, setSidebarCollapsed, setCommandPaletteOpen } =
     useUiStore()
+
+  const handleNewProject = () => {
+    router.push("/projects?new=true")
+  }
 
   const userName = session?.user?.name || "User"
   const userInitials = getInitials(session?.user?.name)
@@ -136,11 +141,11 @@ export function Sidebar() {
       {/* ─── New Project button ─── */}
       <div className="px-3 pt-3">
         {sidebarCollapsed ? (
-          <button className="flex h-9 w-9 items-center justify-center rounded-lg bg-forest text-white hover:bg-forest-light transition-colors cursor-pointer mx-auto">
+          <button onClick={handleNewProject} className="flex h-9 w-9 items-center justify-center rounded-lg bg-forest text-white hover:bg-forest-light transition-colors cursor-pointer mx-auto">
             <Plus className="h-4 w-4" />
           </button>
         ) : (
-          <button className="flex w-full items-center justify-center gap-2 rounded-lg bg-forest px-3 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-forest-light cursor-pointer">
+          <button onClick={handleNewProject} className="flex w-full items-center justify-center gap-2 rounded-lg bg-forest px-3 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-forest-light cursor-pointer">
             <Plus className="h-4 w-4" />
             New Project
           </button>
