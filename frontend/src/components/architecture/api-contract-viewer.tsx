@@ -95,7 +95,7 @@ export function ApiContractViewer() {
                 className="overflow-hidden"
               >
                 {group.endpoints.map((ep) => (
-                  <div key={ep.path} className="group flex items-center gap-3 border-t border-border/50 px-5 py-2.5 hover:bg-cream/20">
+                  <div key={`${ep.method}-${ep.path}`} className="group flex items-center gap-3 border-t border-border/50 px-5 py-2.5 hover:bg-cream/20">
                     <span className={cn("shrink-0 rounded px-2 py-0.5 font-mono text-[10px] font-bold", METHOD_STYLES[ep.method])}>
                       {ep.method}
                     </span>

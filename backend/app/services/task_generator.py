@@ -105,7 +105,7 @@ class TaskGenerator:
                 title=gt.title,
                 description=gt.description,
                 prompt_text=gt.prompt_text,
-                acceptance_criteria_json=gt.acceptance_criteria,
+                acceptance_criteria=gt.acceptance_criteria,
                 status="todo",
                 sequence_order=start_order + i,
                 regression_risk=gt.regression_risk,
@@ -137,7 +137,7 @@ class TaskGenerator:
             f"Regenerate a coding agent prompt for this task:\n"
             f"Title: {task.title}\n"
             f"Description: {task.description}\n"
-            f"Acceptance Criteria: {task.acceptance_criteria_json}\n"
+            f"Acceptance Criteria: {task.acceptance_criteria}\n"
         )
         if additional_context:
             prompt += f"\nAdditional context: {additional_context}"

@@ -199,13 +199,47 @@ function LoginForm() {
         </motion.button>
       </motion.form>
 
-      {/* Footer */}
-      <motion.p
+      {/* Demo credentials */}
+      <motion.div
         custom={4}
         variants={fadeUp}
         initial="hidden"
         animate="visible"
-        className="mt-8 text-center text-sm text-muted"
+        className="mt-6"
+      >
+        <button
+          type="button"
+          onClick={() => {
+            setEmail("test@planforge.ai")
+            setPassword("Test1234")
+          }}
+          className="w-full rounded-xl border border-dashed border-forest/30 bg-forest/5 px-4 py-3 text-left transition-all hover:border-forest/50 hover:bg-forest/10 cursor-pointer"
+        >
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-forest">
+              Demo Credentials — Click to fill
+            </span>
+          </div>
+          <div className="flex items-center gap-4 text-xs text-navy">
+            <span>
+              <span className="text-muted">Email:</span>{" "}
+              <span className="font-mono font-medium">test@planforge.ai</span>
+            </span>
+            <span>
+              <span className="text-muted">Pass:</span>{" "}
+              <span className="font-mono font-medium">Test1234</span>
+            </span>
+          </div>
+        </button>
+      </motion.div>
+
+      {/* Footer */}
+      <motion.p
+        custom={5}
+        variants={fadeUp}
+        initial="hidden"
+        animate="visible"
+        className="mt-6 text-center text-sm text-muted"
       >
         Don&apos;t have an account?{" "}
         <Link

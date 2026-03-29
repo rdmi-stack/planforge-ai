@@ -15,7 +15,7 @@ class Task(TimestampMixin, Document):
     title: str
     description: str | None = None
     prompt_text: str | None = None
-    acceptance_criteria_json: dict | None = None
+    acceptance_criteria: list[str] = Field(default_factory=list)
     status: str = "todo"
     sequence_order: int = 0
     regression_risk: str | None = None

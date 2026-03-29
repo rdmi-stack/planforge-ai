@@ -8,7 +8,7 @@ class TaskCreate(BaseModel):
     description: str | None = None
     feature_id: str | None = None
     prompt_text: str | None = None
-    acceptance_criteria_json: dict | None = None
+    acceptance_criteria: list[str] = Field(default_factory=list)
     sequence_order: int = 0
     regression_risk: str | None = None
     estimated_minutes: float | None = None
@@ -19,7 +19,7 @@ class TaskUpdate(BaseModel):
     title: str | None = Field(None, min_length=1, max_length=300)
     description: str | None = None
     prompt_text: str | None = None
-    acceptance_criteria_json: dict | None = None
+    acceptance_criteria: list[str] | None = None
     status: str | None = None
     sequence_order: int | None = None
     regression_risk: str | None = None
@@ -36,7 +36,7 @@ class TaskResponse(BaseModel):
     title: str
     description: str | None
     prompt_text: str | None
-    acceptance_criteria_json: dict | None
+    acceptance_criteria: list[str]
     status: str
     sequence_order: int
     regression_risk: str | None

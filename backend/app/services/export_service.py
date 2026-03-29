@@ -137,7 +137,7 @@ class ExportService:
                     "title": t.title,
                     "description": t.description,
                     "prompt_text": t.prompt_text,
-                    "acceptance_criteria": t.acceptance_criteria_json,
+                    "acceptance_criteria": t.acceptance_criteria,
                     "status": t.status,
                     "estimated_minutes": t.estimated_minutes,
                     "agent_type": t.agent_type,
@@ -166,7 +166,7 @@ class ExportService:
                 "context": {
                     "project": project.name,
                     "tech_stack": project.tech_stack,
-                    "acceptance_criteria": t.acceptance_criteria_json,
+                    "acceptance_criteria": t.acceptance_criteria,
                 },
                 "metadata": {
                     "estimated_minutes": t.estimated_minutes,
