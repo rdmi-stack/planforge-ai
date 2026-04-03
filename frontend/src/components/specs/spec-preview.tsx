@@ -68,13 +68,13 @@ const SPEC_SECTIONS = [
     id: "architecture",
     title: "Technical Architecture",
     icon: Network,
-    content: "Next.js 16 frontend with Tailwind v4, FastAPI backend with PostgreSQL and Redis, Celery for async AI tasks, WebSocket for real-time collaboration.",
+    content: "Next.js 16 frontend with Tailwind v4, FastAPI backend with MongoDB Atlas and Redis, Celery for async AI tasks, WebSocket for real-time collaboration.",
   },
   {
     id: "schema",
     title: "Database Schema",
     icon: Database,
-    content: "Core entities: users, organizations, projects, specs, features, tasks, agent_runs, decision_log, templates, chat_sessions. All tables use UUID primary keys.",
+    content: "Core entities: users, organizations, projects, specs, features, tasks, agent_runs, decision_log, templates, chat_sessions. Collections use UUID-like document ids and timestamp metadata.",
   },
 ]
 

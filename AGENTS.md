@@ -1,11 +1,11 @@
-# CLAUDE.md — PlanForge AI (BrainGrid Killer)
+# AGENTS.md — PlanForge AI (BrainGrid Killer)
 # AI Product Planning & Development Command Center
 
 ## PROJECT IDENTITY
 
 - **Product Name**: PlanForge AI
 - **Tagline**: "From idea to production-ready code, autonomously."
-- **What it does**: AI-powered product planning platform that takes natural language ideas, generates specs/PRDs, breaks features into atomic tasks, and dispatches them to AI coding agents (Claude Code, Cursor, Codex, etc.) — with codebase awareness, multi-agent orchestration, and production readiness built in.
+- **What it does**: AI-powered product planning platform that takes natural language ideas, generates specs/PRDs, breaks features into atomic tasks, and dispatches them to AI coding agents (Codex, Cursor, Codex, etc.) — with codebase awareness, multi-agent orchestration, and production readiness built in.
 - **Target Users**: AI builders, non-technical founders, indie hackers, dev agencies, product managers
 - **Competitive Target**: BrainGrid AI (dominate and surpass)
 
@@ -38,7 +38,7 @@
 - **Auth**: NextAuth.js v5 on frontend → JWT tokens validated by FastAPI backend
 - **File Storage**: AWS S3 / Cloudflare R2
 - **Search**: MongoDB Atlas Search or application-level search indexes — upgrade to Meilisearch if needed later
-- **AI**: Anthropic Claude API (primary), OpenAI API (fallback), structured output via instructor library
+- **AI**: Anthropic Codex API (primary), OpenAI API (fallback), structured output via instructor library
 
 ### Infrastructure
 - **Package Manager (frontend)**: pnpm
@@ -53,7 +53,7 @@
 ## PROJECT STRUCTURE
 ```
 planforge/
-├── CLAUDE.md                          # THIS FILE
+├── AGENTS.md                          # THIS FILE
 ├── docker-compose.yml                 # Local dev orchestration
 ├── .env.example                       # Environment variables template
 ├── .gitignore
@@ -237,7 +237,7 @@ planforge/
 │   │   ├── services/                  # Business logic layer
 │   │   │   ├── __init__.py
 │   │   │   ├── ai_planner.py          # Core AI: idea → spec → features → tasks
-│   │   │   ├── spec_generator.py      # PRD/spec generation with Claude
+│   │   │   ├── spec_generator.py      # PRD/spec generation with Codex
 │   │   │   ├── feature_decomposer.py  # Epic → feature → story → task breakdown
 │   │   │   ├── task_generator.py      # Atomic task + prompt generation
 │   │   │   ├── prioritizer.py         # ICE/RICE/MoSCoW scoring engine
@@ -567,13 +567,13 @@ WS     /api/v1/ws/project/{id}                           # Real-time collaborati
 
 ### AI Model Usage
 ```python
-# Primary: Claude for all generation
-SPEC_MODEL = "claude-sonnet-4-20250514"
-TASK_MODEL = "claude-sonnet-4-20250514"
-ARCHITECTURE_MODEL = "claude-sonnet-4-20250514"
-CHAT_MODEL = "claude-sonnet-4-20250514"
+# Primary: Codex for all generation
+SPEC_MODEL = "Codex-sonnet-4-20250514"
+TASK_MODEL = "Codex-sonnet-4-20250514"
+ARCHITECTURE_MODEL = "Codex-sonnet-4-20250514"
+CHAT_MODEL = "Codex-sonnet-4-20250514"
 
-# Fallback: OpenAI if Claude is down
+# Fallback: OpenAI if Codex is down
 FALLBACK_MODEL = "gpt-4o"
 ```
 
@@ -713,7 +713,7 @@ uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
 
 ---
 
-## IMPORTANT REMINDERS FOR CLAUDE CODE
+## IMPORTANT REMINDERS FOR Codex
 
 1. **Next.js 16 uses `proxy.ts` NOT `middleware.ts`**. The export is `proxy()` not `middleware()`.
 2. **Tailwind v4 has NO config JS file**. Use `@import "tailwindcss"` and `@theme {}` in CSS.

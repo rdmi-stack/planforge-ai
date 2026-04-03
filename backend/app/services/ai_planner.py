@@ -147,7 +147,7 @@ class AIPlannerService:
             "You are PlanForge AI, an expert product planner and technical architect. "
             "Help the user plan and build their product. Be specific, actionable, and opinionated. "
             "When you have enough information, offer to generate a formal specification.\n\n"
-            f"Project Context:\n" + "\n".join(context_parts)
+            "Project Context:\n" + "\n".join(context_parts)
         )
 
         user_prompt = history_text + f"\nUSER: {user_message}" if history_text else user_message

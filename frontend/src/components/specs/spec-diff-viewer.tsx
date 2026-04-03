@@ -15,6 +15,7 @@ type DiffBlock = {
   lines: DiffLine[]
 }
 
+// Demo diff data — replace with real spec version comparison API
 const DEMO_DIFF: DiffBlock[] = [
   {
     section: "Core Features",
@@ -47,13 +48,18 @@ const DEMO_DIFF: DiffBlock[] = [
       { type: "removed", content: "Next.js frontend with basic API routes" },
       { type: "added", content: "Next.js 16 frontend with Tailwind v4 and App Router" },
       { type: "removed", content: "Express backend with MongoDB" },
-      { type: "added", content: "FastAPI backend with PostgreSQL, Redis, and Celery" },
+      { type: "added", content: "FastAPI backend with MongoDB Atlas, Redis, and Celery" },
       { type: "added", content: "WebSocket support for real-time collaboration" },
     ],
   },
 ]
 
-export function SpecDiffViewer() {
+type SpecDiffViewerProps = {
+  specId?: string
+  projectId?: string
+}
+
+export function SpecDiffViewer({ specId, projectId }: SpecDiffViewerProps) {
   const [viewMode, setViewMode] = useState<"unified" | "split">("unified")
 
   const stats = DEMO_DIFF.reduce(

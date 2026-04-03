@@ -3,7 +3,7 @@
 
 from datetime import datetime
 
-from beanie import Document, Indexed
+from beanie import Document
 from pydantic import Field
 
 from app.models.base import TimestampMixin

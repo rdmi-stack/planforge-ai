@@ -54,6 +54,13 @@ function mapBackendProject(p: BackendProject): Project {
   }
 }
 
+type ProjectCounts = {
+  specCount: number
+  featureCount: number
+  taskCount: number
+  completedTaskCount: number
+}
+
 type FilterStatus = "all" | "active" | "draft" | "archived"
 type ViewMode = "grid" | "list"
 
@@ -89,7 +96,39 @@ function ProjectsPage() {
       setError(null)
       const data = await apiClientAuth<BackendProject[] | { data: BackendProject[] }>("/projects")
       const list = Array.isArray(data) ? data : (data.data ?? [])
-      setProjects(list.map(mapBackendProject))
+      const projectsWithCounts = await Promise.all(
+        list.map(async (project) => {
+          let counts: ProjectCounts = {
+            specCount: 0,
+            featureCount: 0,
+            taskCount: 0,
+            completedTaskCount: 0,
+          }
+
+          try {
+            const [specs, features, tasks] = await Promise.all([
+              apiClientAuth<Array<{ id: string }>>(`/projects/${project.id}/specs`),
+              apiClientAuth<Array<{ id: string }>>(`/projects/${project.id}/features`),
+              apiClientAuth<Array<{ id: string; status: string }>>(`/projects/${project.id}/tasks`),
+            ])
+
+            counts = {
+              specCount: specs.length,
+              featureCount: features.length,
+              taskCount: tasks.length,
+              completedTaskCount: tasks.filter((task) => ["done", "completed", "complete"].includes(task.status)).length,
+            }
+          } catch {
+            // Keep project cards usable even if aggregate lookups fail.
+          }
+
+          return {
+            ...mapBackendProject(project),
+            ...counts,
+          }
+        })
+      )
+      setProjects(projectsWithCounts)
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to load projects"
       setError(message)

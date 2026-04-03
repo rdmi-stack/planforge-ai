@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
-import { CreditCard, Check, ArrowUpRight, Receipt, Download, Sparkles, TrendingUp, Zap, Loader2 } from "lucide-react"
+import { CreditCard, Check, ArrowUpRight, Receipt, Sparkles, TrendingUp, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { apiClientAuth } from "@/lib/api-client"
 import { useToastStore } from "@/stores/toast-store"
@@ -17,13 +17,6 @@ type SubscriptionData = {
 }
 
 const PLAN_PRICES: Record<string, number> = { free: 0, pro: 39, team: 99 }
-
-const INVOICES = [
-  { id: "INV-2026-03", date: "Mar 1, 2026", amount: "$39.00", status: "Paid" },
-  { id: "INV-2026-02", date: "Feb 1, 2026", amount: "$39.00", status: "Paid" },
-  { id: "INV-2026-01", date: "Jan 1, 2026", amount: "$39.00", status: "Paid" },
-  { id: "INV-2025-12", date: "Dec 1, 2025", amount: "$29.00", status: "Paid" },
-]
 
 export default function BillingPage() {
   const router = useRouter()
@@ -65,10 +58,10 @@ export default function BillingPage() {
     setCanceling(true)
     try {
       const data = await apiClientAuth<{ status: string; message: string }>("/billing/cancel", { method: "POST" })
-      useToastStore.getState().addToast(data.message, "info")
-      setSubscription((prev) => prev ? { ...prev, plan: "free", status: "canceled" } : prev)
+      addToast(data.message, "info")
+      setSubscription((prev) => prev ? { ...prev, status: "canceled" } : prev)
     } catch {
-      useToastStore.getState().addToast("Failed to cancel subscription", "error")
+      addToast("Failed to cancel subscription", "error")
     } finally {
       setCanceling(false)
     }
@@ -88,6 +81,9 @@ export default function BillingPage() {
   const usagePct = subscription.generations_limit > 0
     ? Math.round((subscription.generations_used / subscription.generations_limit) * 100)
     : 0
+  const nextInvoiceText = subscription.current_period_end
+    ? new Date(subscription.current_period_end).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    : "Not scheduled"
 
   return (
     <div className="p-6 sm:p-8">
@@ -114,7 +110,7 @@ export default function BillingPage() {
               </div>
               <p className="mt-1 text-xs text-muted">
                 {subscription.current_period_end
-                  ? `Billed monthly \u00b7 Next invoice ${new Date(subscription.current_period_end).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+                  ? `Billed in-app \u00b7 Current term ends ${nextInvoiceText}`
                   : "Free tier"}
               </p>
             </div>
@@ -180,15 +176,11 @@ export default function BillingPage() {
         {/* Payment method */}
         <div className="rounded-xl border border-border bg-white p-6">
           <h3 className="mb-4 flex items-center gap-2 text-sm font-bold text-navy"><CreditCard className="h-4 w-4 text-forest" /> Payment Method</h3>
-          <div className="flex items-center justify-between rounded-lg border border-border bg-cream/30 px-4 py-3">
-            <div className="flex items-center gap-3">
-              <div className="flex h-8 w-12 items-center justify-center rounded bg-navy text-[10px] font-bold text-white">VISA</div>
-              <div>
-                <div className="text-sm font-medium text-navy">&middot;&middot;&middot;&middot; &middot;&middot;&middot;&middot; &middot;&middot;&middot;&middot; 4242</div>
-                <div className="text-[11px] text-muted">Expires 12/2028</div>
-              </div>
-            </div>
-            <button onClick={() => useToastStore.getState().addToast("Stripe integration coming soon", "info")} className="text-xs font-medium text-forest hover:text-forest-light transition-colors cursor-pointer">Update</button>
+          <div className="rounded-lg border border-border bg-cream/30 px-4 py-3">
+            <div className="text-sm font-medium text-navy">Stripe customer portal is not connected yet.</div>
+            <p className="mt-1 text-[11px] text-muted">
+              The billing screen now reflects your real plan state, but card storage and invoice downloads still need a live Stripe integration before they can be sold as self-serve billing features.
+            </p>
           </div>
         </div>
 
@@ -197,21 +189,14 @@ export default function BillingPage() {
           <div className="flex items-center justify-between border-b border-border px-5 py-3">
             <h3 className="flex items-center gap-2 text-sm font-bold text-navy"><Receipt className="h-4 w-4 text-forest" /> Invoices</h3>
           </div>
-          {INVOICES.map((inv, i) => (
-            <div key={inv.id} className={cn("flex items-center justify-between px-5 py-3", i < INVOICES.length - 1 && "border-b border-border/50")}>
-              <div className="flex items-center gap-4">
-                <span className="font-mono text-xs text-muted">{inv.id}</span>
-                <span className="text-xs text-navy">{inv.date}</span>
-              </div>
-              <div className="flex items-center gap-4">
-                <span className="text-xs font-semibold text-navy">{inv.amount}</span>
-                <span className="inline-flex items-center gap-1 rounded-full bg-success-light px-2 py-0.5 text-[10px] font-semibold text-success">
-                  <Check className="h-3 w-3" /> {inv.status}
-                </span>
-                <button onClick={() => useToastStore.getState().addToast("Download coming soon", "info")} className="text-muted-light hover:text-navy transition-colors cursor-pointer"><Download className="h-3.5 w-3.5" /></button>
-              </div>
+          <div className="px-5 py-6">
+            <div className="rounded-lg border border-dashed border-border bg-cream/20 p-4">
+              <div className="text-sm font-medium text-navy">No downloadable invoices available yet</div>
+              <p className="mt-1 text-[11px] text-muted">
+                Invoice history will appear here once the checkout flow is backed by a real payment processor.
+              </p>
             </div>
-          ))}
+          </div>
         </div>
       </div>
     </div>

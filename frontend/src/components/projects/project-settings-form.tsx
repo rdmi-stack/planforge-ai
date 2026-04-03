@@ -11,6 +11,8 @@ import {
   X,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { apiClientAuth } from "@/lib/api-client"
+import { useToastStore } from "@/stores/toast-store"
 import type { Project } from "@/types/project"
 
 type ProjectSettingsFormProps = {
@@ -25,12 +27,29 @@ export function ProjectSettingsForm({ project }: ProjectSettingsFormProps) {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
+  const addToast = useToastStore((s) => s.addToast)
+
   const handleSave = async () => {
     setSaving(true)
-    await new Promise((r) => setTimeout(r, 1000))
-    setSaving(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
+    try {
+      await apiClientAuth(`/projects/${project.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          name,
+          description: description || null,
+          github_repo_url: githubUrl || null,
+          status,
+        }),
+      })
+      setSaved(true)
+      addToast("Project settings saved", "success")
+      setTimeout(() => setSaved(false), 2000)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to save settings"
+      addToast(message, "error")
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (

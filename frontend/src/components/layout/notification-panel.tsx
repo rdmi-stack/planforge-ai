@@ -39,6 +39,7 @@ const ICON_MAP: Record<NotificationType, { icon: React.ElementType; color: strin
   ai: { icon: Sparkles, color: "text-forest", bg: "bg-forest/10" },
 }
 
+// Demo notifications — replace with real API when notification backend is built
 const DEMO_NOTIFICATIONS: Notification[] = [
   {
     id: "n1",

@@ -194,12 +194,12 @@ async def dispatch_task(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
 
     # Create agent run record
-    from datetime import datetime, UTC
+    from datetime import datetime, timezone
     agent_run = AgentRun(
         task_id=task_id,
         agent_type=data.agent_type,
         status="queued",
-        started_at=datetime.now(UTC).isoformat(),
+        started_at=datetime.now(timezone.utc).isoformat(),
         retry_count=0,
     )
     await agent_run.insert()

@@ -6,7 +6,8 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "eslint . --ext .js,.jsx,.ts,.tsx --max-warnings=0",
+    "typecheck": "next build && tsc --noEmit --incremental false"
   },
   "dependencies": {
     "@auth/mongodb-adapter": "^3.11.1",
@@ -41,6 +42,8 @@
     "@types/bcryptjs": "^3.0.0",
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
+    "eslint": "8.57.0",
+    "eslint-config-next": "^15.5.14",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.7.0"
   }

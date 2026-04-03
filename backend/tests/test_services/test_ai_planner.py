@@ -11,25 +11,18 @@ from app.services.ai_planner import AIPlannerService
 @pytest.mark.asyncio
 async def test_ask_smart_questions_returns_string() -> None:
     """ask_smart_questions should return a non-empty string response."""
-    mock_db = AsyncMock()
-
-    # Mock project query
     mock_project = MagicMock()
     mock_project.name = "Test Project"
     mock_project.description = "A test project"
     mock_project.tech_stack = []
 
-    mock_result = MagicMock()
-    mock_result.scalar_one_or_none.return_value = mock_project
-    mock_db.execute = AsyncMock(return_value=mock_result)
-
-    with patch.object(AIPlannerService, "__init__", lambda self, db: None):
+    with patch.object(AIPlannerService, "__init__", lambda self: None):
         planner = AIPlannerService.__new__(AIPlannerService)
-        planner.db = mock_db
 
         mock_ai = AsyncMock()
         mock_ai.generate = AsyncMock(return_value="1. What is your target audience?\n2. What scale do you expect?")
         planner.ai_client = mock_ai
+        planner._get_project = AsyncMock(return_value=mock_project)
 
         from jinja2 import Environment, FileSystemLoader
         from pathlib import Path
@@ -52,21 +45,14 @@ async def test_ask_smart_questions_returns_string() -> None:
 @pytest.mark.asyncio
 async def test_chat_stream_yields_chunks() -> None:
     """chat_stream should yield text chunks from the AI client."""
-    mock_db = AsyncMock()
-
-    # Mock project
     mock_project = MagicMock()
     mock_project.name = "Stream Test"
     mock_project.description = "Testing streaming"
     mock_project.tech_stack = []
 
-    mock_result = MagicMock()
-    mock_result.scalar_one_or_none.return_value = mock_project
-    mock_db.execute = AsyncMock(return_value=mock_result)
-
-    with patch.object(AIPlannerService, "__init__", lambda self, db: None):
+    with patch.object(AIPlannerService, "__init__", lambda self: None):
         planner = AIPlannerService.__new__(AIPlannerService)
-        planner.db = mock_db
+        planner._get_project = AsyncMock(return_value=mock_project)
 
         # Mock streaming
         async def mock_stream(*args, **kwargs):
@@ -90,14 +76,9 @@ async def test_chat_stream_yields_chunks() -> None:
 @pytest.mark.asyncio
 async def test_get_project_not_found_raises() -> None:
     """_get_project should raise ValueError for non-existent projects."""
-    mock_db = AsyncMock()
-    mock_result = MagicMock()
-    mock_result.scalar_one_or_none.return_value = None
-    mock_db.execute = AsyncMock(return_value=mock_result)
-
-    with patch.object(AIPlannerService, "__init__", lambda self, db: None):
+    with patch.object(AIPlannerService, "__init__", lambda self: None):
         planner = AIPlannerService.__new__(AIPlannerService)
-        planner.db = mock_db
 
-        with pytest.raises(ValueError, match="not found"):
-            await planner._get_project(uuid4())
+        with patch("app.services.ai_planner.Project.find_one", AsyncMock(return_value=None)):
+            with pytest.raises(ValueError, match="not found"):
+                await planner._get_project(uuid4())

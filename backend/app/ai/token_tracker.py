@@ -6,8 +6,6 @@ from uuid import UUID
 import structlog
 from redis.asyncio import Redis
 
-from app.config import get_settings
-
 logger = structlog.get_logger()
 
 

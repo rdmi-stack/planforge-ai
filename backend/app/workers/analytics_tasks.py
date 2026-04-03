@@ -29,53 +29,36 @@ def compute_project_velocity(project_id: str, days: int = 30) -> dict:
     logger.info("celery_velocity_start", project_id=project_id, days=days)
 
     async def _run():
-        from sqlalchemy import func, select
-
-        from app.database import async_session_factory
         from app.models.task import Task
 
-        async with async_session_factory() as db:
-            cutoff = datetime.now(UTC) - timedelta(days=days)
+        cutoff = datetime.now(UTC) - timedelta(days=days)
+        project_key = str(UUID(project_id))
 
-            # Total tasks
-            total_result = await db.execute(
-                select(func.count()).select_from(Task).where(Task.project_id == UUID(project_id))
-            )
-            total = total_result.scalar_one()
+        total = await Task.find(Task.project_id == project_key).count()
+        completed_in_period = await Task.find(
+            Task.project_id == project_key,
+            Task.status == "done",
+            Task.updated_at >= cutoff,
+        ).count()
 
-            # Completed tasks in period
-            completed_result = await db.execute(
-                select(func.count())
-                .select_from(Task)
-                .where(
-                    Task.project_id == UUID(project_id),
-                    Task.status == "done",
-                    Task.updated_at >= cutoff,
-                )
-            )
-            completed_in_period = completed_result.scalar_one()
+        status_counts: dict[str, int] = {}
+        for task_status in ("todo", "in_progress", "done", "failed", "dispatched"):
+            status_counts[task_status] = await Task.find(
+                Task.project_id == project_key,
+                Task.status == task_status,
+            ).count()
 
-            # Tasks by status
-            status_counts: dict[str, int] = {}
-            for status in ("todo", "in_progress", "done", "failed", "dispatched"):
-                count_result = await db.execute(
-                    select(func.count())
-                    .select_from(Task)
-                    .where(Task.project_id == UUID(project_id), Task.status == status)
-                )
-                status_counts[status] = count_result.scalar_one()
+        velocity = completed_in_period / max(days, 1)
 
-            velocity = completed_in_period / max(days, 1)
-
-            return {
-                "project_id": project_id,
-                "period_days": days,
-                "total_tasks": total,
-                "completed_in_period": completed_in_period,
-                "velocity_per_day": round(velocity, 2),
-                "status_breakdown": status_counts,
-                "completion_percentage": round((status_counts.get("done", 0) / max(total, 1)) * 100, 1),
-            }
+        return {
+            "project_id": project_id,
+            "period_days": days,
+            "total_tasks": total,
+            "completed_in_period": completed_in_period,
+            "velocity_per_day": round(velocity, 2),
+            "status_breakdown": status_counts,
+            "completion_percentage": round((status_counts.get("done", 0) / max(total, 1)) * 100, 1),
+        }
 
     result = _run_async(_run())
     logger.info("celery_velocity_complete", project_id=project_id, velocity=result["velocity_per_day"])
@@ -91,51 +74,30 @@ def compute_scope_creep(project_id: str) -> dict:
     logger.info("celery_scope_creep_start", project_id=project_id)
 
     async def _run():
-        from sqlalchemy import func, select
-
-        from app.database import async_session_factory
         from app.models.feature import Feature
         from app.models.task import Task
 
-        async with async_session_factory() as db:
-            # Current counts
-            feature_count_result = await db.execute(
-                select(func.count()).select_from(Feature).where(Feature.project_id == UUID(project_id))
-            )
-            feature_count = feature_count_result.scalar_one()
+        project_key = str(UUID(project_id))
 
-            task_count_result = await db.execute(
-                select(func.count()).select_from(Task).where(Task.project_id == UUID(project_id))
-            )
-            task_count = task_count_result.scalar_one()
+        feature_count = await Feature.find(Feature.project_id == project_key).count()
+        task_count = await Task.find(Task.project_id == project_key).count()
+        mvp_count = await Feature.find(
+            Feature.project_id == project_key,
+            Feature.mvp_classification == "must_have",
+        ).count()
 
-            # MVP vs non-MVP features
-            mvp_result = await db.execute(
-                select(func.count())
-                .select_from(Feature)
-                .where(
-                    Feature.project_id == UUID(project_id),
-                    Feature.mvp_classification == "must_have",
-                )
-            )
-            mvp_count = mvp_result.scalar_one()
+        all_tasks = await Task.find(Task.project_id == project_key).to_list()
+        total_effort_minutes = sum(task.estimated_minutes or 0 for task in all_tasks)
 
-            # Estimated total effort
-            effort_result = await db.execute(
-                select(func.sum(Task.estimated_minutes))
-                .where(Task.project_id == UUID(project_id))
-            )
-            total_effort_minutes = effort_result.scalar_one() or 0
-
-            return {
-                "project_id": project_id,
-                "total_features": feature_count,
-                "mvp_features": mvp_count,
-                "non_mvp_features": feature_count - mvp_count,
-                "total_tasks": task_count,
-                "total_effort_hours": round(total_effort_minutes / 60, 1),
-                "scope_ratio": round(feature_count / max(mvp_count, 1), 2),
-            }
+        return {
+            "project_id": project_id,
+            "total_features": feature_count,
+            "mvp_features": mvp_count,
+            "non_mvp_features": feature_count - mvp_count,
+            "total_tasks": task_count,
+            "total_effort_hours": round(total_effort_minutes / 60, 1),
+            "scope_ratio": round(feature_count / max(mvp_count, 1), 2),
+        }
 
     result = _run_async(_run())
     logger.info("celery_scope_creep_complete", project_id=project_id, scope_ratio=result["scope_ratio"])

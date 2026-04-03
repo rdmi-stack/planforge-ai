@@ -21,8 +21,6 @@ class TemplateEngine:
         user_id: UUID | None = None,
     ) -> list[Template]:
         """List available templates, optionally filtered by category."""
-        conditions = {}
-
         if is_public and user_id:
             # Public templates OR user's own templates - need $or query
             templates_public = await Template.find(

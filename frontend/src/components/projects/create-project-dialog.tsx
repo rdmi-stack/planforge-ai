@@ -35,7 +35,7 @@ const TEMPLATES = [
 const TECH_OPTIONS = [
   "Next.js", "React", "Vue", "Svelte", "Nuxt",
   "FastAPI", "Django", "Express", "Rails", "Spring",
-  "PostgreSQL", "MongoDB", "Supabase", "Firebase",
+  "MongoDB Atlas", "MongoDB", "Supabase", "Firebase",
   "Tailwind", "TypeScript", "Python", "Go", "Rust",
   "Docker", "AWS", "Vercel", "Railway",
 ]

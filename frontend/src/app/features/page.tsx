@@ -336,7 +336,7 @@ function TaskPromptMock() {
             <p>- POST /auth/login returning JWT + refresh</p>
             <p>- POST /auth/refresh for token rotation</p>
             <p>- Use bcrypt for hashing, zod for validation</p>
-            <p className="mt-1 text-lime/60">// Convention: follow existing error handler pattern in /src/middleware/</p>
+            <p className="mt-1 text-lime/60">{"// Convention: follow existing error handler pattern in /src/middleware/"}</p>
           </div>
         </div>
       </div>

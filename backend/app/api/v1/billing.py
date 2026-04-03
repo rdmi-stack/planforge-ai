@@ -1,11 +1,19 @@
-"""Mock Stripe billing system endpoints."""
+"""Billing endpoints backed by the current user record.
+
+These routes still operate in-app instead of redirecting to Stripe, but they
+now return and persist real subscription state for the authenticated user
+instead of serving hard-coded mock data.
+"""
 
 import uuid
 from datetime import datetime, timedelta
 
 import structlog
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
+
+from app.dependencies import get_current_user
+from app.models.user import User
 
 logger = structlog.get_logger()
 
@@ -24,6 +32,8 @@ class CheckoutResponse(BaseModel):
 
 class PortalResponse(BaseModel):
     url: str
+    available: bool
+    message: str
 
 
 class SubscriptionResponse(BaseModel):
@@ -45,18 +55,21 @@ class CancelResponse(BaseModel):
     message: str
 
 
-# In-memory mock store (would be replaced by real DB queries)
-_mock_subscriptions: dict[str, dict] = {}
-
-
 def _get_generations_limit(plan: str) -> int:
     limits = {"free": 30, "pro": 500, "team": -1}
     return limits.get(plan, 30)
 
 
 @router.post("/checkout", response_model=CheckoutResponse)
-async def create_checkout_session(data: CheckoutRequest) -> CheckoutResponse:
-    """Create a mock Stripe checkout session."""
+async def create_checkout_session(
+    data: CheckoutRequest,
+    user: User = Depends(get_current_user),
+) -> CheckoutResponse:
+    """Persist a selected plan for the current user.
+
+    This keeps the in-product upgrade flow usable for demos and internal sales
+    environments until a real Stripe checkout is connected.
+    """
     if data.plan not in ("pro", "team"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -68,62 +81,73 @@ async def create_checkout_session(data: CheckoutRequest) -> CheckoutResponse:
             detail="Invalid billing period. Must be 'monthly' or 'yearly'.",
         )
 
-    session_id = f"mock_sess_{uuid.uuid4().hex[:12]}"
-    logger.info("billing_checkout_created", plan=data.plan, billing=data.billing, session_id=session_id)
+    session_id = f"demo_sess_{uuid.uuid4().hex[:12]}"
+    billing_days = 365 if data.billing == "yearly" else 30
+
+    user.plan = data.plan
+    user.subscription_status = "active"
+    user.current_period_end = (datetime.utcnow() + timedelta(days=billing_days)).isoformat()
+    user.generations_limit = _get_generations_limit(data.plan)
+    await user.save()
+
+    logger.info(
+        "billing_checkout_created",
+        user_id=user.id,
+        plan=data.plan,
+        billing=data.billing,
+        session_id=session_id,
+    )
 
     return CheckoutResponse(
-        url=f"/billing?success=true&plan={data.plan}",
+        url=f"/billing?upgraded={data.plan}",
         session_id=session_id,
     )
 
 
 @router.post("/portal", response_model=PortalResponse)
-async def create_portal_session() -> PortalResponse:
-    """Return a mock Stripe customer portal URL."""
-    return PortalResponse(url="/billing")
+async def create_portal_session(
+    user: User = Depends(get_current_user),
+) -> PortalResponse:
+    """Expose portal readiness honestly until Stripe is connected."""
+    logger.info("billing_portal_requested", user_id=user.id)
+    return PortalResponse(
+        url="/billing",
+        available=False,
+        message="Customer billing portal is not configured yet.",
+    )
 
 
 @router.post("/webhook")
 async def handle_billing_webhook(event: WebhookEvent) -> dict:
-    """Mock webhook that updates user plan."""
-    if event.type == "checkout.session.completed" and event.plan:
-        _mock_subscriptions[event.user_id] = {
-            "plan": event.plan,
-            "status": "active",
-            "current_period_end": (datetime.utcnow() + timedelta(days=30)).isoformat(),
-            "generations_used": 0,
-            "generations_limit": _get_generations_limit(event.plan),
-        }
-        logger.info("billing_webhook_plan_updated", user_id=event.user_id, plan=event.plan)
-    elif event.type == "customer.subscription.deleted":
-        if event.user_id in _mock_subscriptions:
-            _mock_subscriptions[event.user_id]["status"] = "canceled"
-            _mock_subscriptions[event.user_id]["plan"] = "free"
-            _mock_subscriptions[event.user_id]["generations_limit"] = 30
-            logger.info("billing_webhook_subscription_canceled", user_id=event.user_id)
+    """Placeholder webhook endpoint for future Stripe integration."""
+    logger.info("billing_webhook_received", event_type=event.type, user_id=event.user_id, plan=event.plan)
 
     return {"received": True}
 
 
 @router.get("/subscription", response_model=SubscriptionResponse)
-async def get_subscription() -> SubscriptionResponse:
-    """Return current user's plan details (mock: returns default pro plan)."""
-    # In a real app this would look up the authenticated user's subscription.
-    # For the mock, return a sensible default.
+async def get_subscription(
+    user: User = Depends(get_current_user),
+) -> SubscriptionResponse:
+    """Return current user's persisted subscription details."""
     return SubscriptionResponse(
-        plan="pro",
-        status="active",
-        current_period_end=(datetime.utcnow() + timedelta(days=15)).isoformat(),
-        generations_used=312,
-        generations_limit=500,
+        plan=user.plan,
+        status=user.subscription_status,
+        current_period_end=user.current_period_end,
+        generations_used=user.generations_used,
+        generations_limit=user.generations_limit,
     )
 
 
 @router.post("/cancel", response_model=CancelResponse)
-async def cancel_subscription() -> CancelResponse:
-    """Mock cancel subscription."""
-    logger.info("billing_subscription_canceled_mock")
+async def cancel_subscription(
+    user: User = Depends(get_current_user),
+) -> CancelResponse:
+    """Cancel auto-renewal for the current user."""
+    user.subscription_status = "canceled"
+    await user.save()
+    logger.info("billing_subscription_canceled", user_id=user.id, plan=user.plan)
     return CancelResponse(
         status="canceled",
-        message="Your subscription has been canceled. You will retain access until the end of the current billing period.",
+        message="Auto-renewal has been canceled. Your current plan remains active until the end of the billing period.",
     )

@@ -3,72 +3,72 @@
 import uuid
 from collections.abc import AsyncGenerator
 
-import pytest
+import pytest_asyncio
+from beanie import init_beanie
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from mongomock_motor import AsyncMongoMockClient
 
 from app.config import get_settings
-from app.database import get_db
 from app.main import app
-from app.models.base import Base
+from app.models import ALL_MODELS
+from app.models.organization import Organization
 from app.models.user import User
 from app.utils.security import create_access_token, hash_password
 
-# Use a separate test database URL (falls back to main DB if not set)
-TEST_DATABASE_URL = get_settings().DATABASE_URL.replace("/planforge", "/planforge_test")
+
+def _build_mongo_client() -> AsyncMongoMockClient:
+    # Keep tests hermetic and fast instead of depending on Atlas DNS/network.
+    return AsyncMongoMockClient()
 
 
-@pytest.fixture(scope="session")
-def engine():
-    """Create a test database engine (session-scoped for speed)."""
-    return create_async_engine(TEST_DATABASE_URL, echo=False)
+@pytest_asyncio.fixture
+async def mongo_client() -> AsyncGenerator[AsyncMongoMockClient]:
+    client = _build_mongo_client()
+    yield client
 
 
-@pytest.fixture(scope="session")
-async def setup_database(engine):
-    """Create all tables at session start, drop at session end."""
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+@pytest_asyncio.fixture
+async def test_database(mongo_client: AsyncMongoMockClient) -> AsyncGenerator:
+    settings = get_settings()
+    database = mongo_client[f"{settings.MONGODB_DB_NAME}_test"]
+
+    original_list_collection_names = database.list_collection_names
+
+    async def compatible_list_collection_names(*args, **kwargs):
+        kwargs.pop("authorizedCollections", None)
+        kwargs.pop("nameOnly", None)
+        return await original_list_collection_names(*args, **kwargs)
+
+    database.list_collection_names = compatible_list_collection_names  # type: ignore[method-assign]
+    await init_beanie(database=database, document_models=ALL_MODELS)
+    yield database
+    await mongo_client.drop_database(database.name)
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def clean_database(test_database) -> AsyncGenerator[None]:
+    for model in ALL_MODELS:
+        await model.delete_all()
     yield
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-    await engine.dispose()
+    for model in ALL_MODELS:
+        await model.delete_all()
 
 
-@pytest.fixture
-async def db_session(engine, setup_database) -> AsyncGenerator[AsyncSession]:
-    """Provide a transactional database session that rolls back after each test."""
-    session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    async with session_factory() as session:
-        async with session.begin():
-            yield session
-            await session.rollback()
-
-
-@pytest.fixture
-async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient]:
-    """Provide an async HTTP test client with dependency overrides."""
-
-    async def override_get_db() -> AsyncGenerator[AsyncSession]:
-        yield db_session
-
-    app.dependency_overrides[get_db] = override_get_db
-
+@pytest_asyncio.fixture
+async def client(test_database) -> AsyncGenerator[AsyncClient]:
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        yield ac
-
-    app.dependency_overrides.clear()
+    async with AsyncClient(transport=transport, base_url="http://test") as async_client:
+        yield async_client
 
 
-@pytest.fixture
-async def test_user(db_session: AsyncSession) -> User:
-    """Create a test user in the database."""
-    from app.models.organization import Organization
-
-    org = Organization(name="Test Org", slug=f"test-org-{uuid.uuid4().hex[:8]}", plan="free")
-    db_session.add(org)
-    await db_session.flush()
+@pytest_asyncio.fixture
+async def test_user(test_database) -> User:
+    org = Organization(
+        name="Test Org",
+        slug=f"test-org-{uuid.uuid4().hex[:8]}",
+        plan="free",
+    )
+    await org.insert()
 
     user = User(
         email=f"test-{uuid.uuid4().hex[:8]}@example.com",
@@ -77,15 +77,12 @@ async def test_user(db_session: AsyncSession) -> User:
         plan="free",
         org_id=org.id,
     )
-    db_session.add(user)
-    await db_session.flush()
-    await db_session.refresh(user)
+    await user.insert()
     return user
 
 
-@pytest.fixture
-def auth_headers(test_user: User) -> dict[str, str]:
-    """Generate authorization headers for the test user."""
+@pytest_asyncio.fixture
+async def auth_headers(test_user: User) -> dict[str, str]:
     token = create_access_token(
         user_id=test_user.id,
         email=test_user.email,

@@ -14,11 +14,9 @@ import {
   Sparkles,
   Clock,
   CheckCircle2,
-  AlertCircle,
   GitBranch,
   Activity,
   Plus,
-  Network,
   TrendingUp,
   Zap,
 } from "lucide-react"
@@ -39,16 +37,18 @@ type BackendProject = {
   updated_at: string
 }
 
-const STATS = [
-  { label: "Specs", value: "0", icon: FileText, color: "text-blue-600", bg: "bg-blue-50", href: "specs" },
-  { label: "Features", value: "0", icon: Layers, color: "text-violet-600", bg: "bg-violet-50", href: "features" },
-  { label: "Tasks", value: "0", icon: ListChecks, color: "text-emerald-600", bg: "bg-emerald-50", href: "tasks" },
-  { label: "Agents", value: "0", icon: Bot, color: "text-pink-600", bg: "bg-pink-50", href: "agents" },
-]
+type SpecSummary = { id: string; title: string; updated_at: string; created_at: string }
+type FeatureSummary = { id: string; title: string; status: string; updated_at: string; created_at: string }
+type TaskSummary = { id: string; title: string; status: string; updated_at: string; created_at: string; agent_run_id: string | null }
 
-const RECENT_ACTIVITY = [
-  { action: "Project created", detail: "Waiting for specs and features", time: "Just now", icon: CheckCircle2, color: "text-success" },
-]
+type ActivityItem = {
+  action: string
+  detail: string
+  time: string
+  icon: React.ElementType
+  color: string
+  timestamp: number
+}
 
 function getQuickActions(projectId: string) {
   return [
@@ -65,11 +65,89 @@ const STATUS_DISPLAY: Record<string, { label: string; className: string }> = {
   archived: { label: "Archived", className: "bg-gray-100 text-gray-500" },
 }
 
+const DONE_TASK_STATUSES = new Set(["done", "completed", "complete"])
+const IN_PROGRESS_TASK_STATUSES = new Set(["in_progress", "in-progress", "doing"])
+
+function formatRelativeTime(dateString: string): string {
+  const deltaMs = Date.now() - new Date(dateString).getTime()
+  const deltaMinutes = Math.max(1, Math.round(deltaMs / 60000))
+
+  if (deltaMinutes < 60) {
+    return `${deltaMinutes}m ago`
+  }
+
+  const deltaHours = Math.round(deltaMinutes / 60)
+  if (deltaHours < 24) {
+    return `${deltaHours}h ago`
+  }
+
+  const deltaDays = Math.round(deltaHours / 24)
+  return `${deltaDays}d ago`
+}
+
+function buildRecentActivity(
+  project: BackendProject,
+  specs: SpecSummary[],
+  features: FeatureSummary[],
+  tasks: TaskSummary[],
+): ActivityItem[] {
+  const items: ActivityItem[] = [
+    {
+      action: "Project created",
+      detail: project.description ?? "Project created and ready for planning",
+      time: formatRelativeTime(project.created_at),
+      icon: CheckCircle2,
+      color: "text-success",
+      timestamp: new Date(project.created_at).getTime(),
+    },
+  ]
+
+  specs.forEach((spec) => {
+    items.push({
+      action: "Spec updated",
+      detail: spec.title,
+      time: formatRelativeTime(spec.updated_at),
+      icon: FileText,
+      color: "text-blue-600",
+      timestamp: new Date(spec.updated_at).getTime(),
+    })
+  })
+
+  features.forEach((feature) => {
+    items.push({
+      action: "Feature refined",
+      detail: `${feature.title} · ${feature.status}`,
+      time: formatRelativeTime(feature.updated_at),
+      icon: Layers,
+      color: "text-violet-600",
+      timestamp: new Date(feature.updated_at).getTime(),
+    })
+  })
+
+  tasks.forEach((task) => {
+    items.push({
+      action: task.agent_run_id ? "Agent task dispatched" : "Task updated",
+      detail: `${task.title} · ${task.status}`,
+      time: formatRelativeTime(task.updated_at),
+      icon: task.agent_run_id ? Bot : ListChecks,
+      color: task.agent_run_id ? "text-pink-600" : "text-emerald-600",
+      timestamp: new Date(task.updated_at).getTime(),
+    })
+  })
+
+  return items
+    .sort((a, b) => b.timestamp - a.timestamp)
+    .slice(0, 6)
+}
+
 export default function ProjectOverviewPage() {
   const params = useParams()
   const projectId = params.projectId as string
 
   const [project, setProject] = useState<BackendProject | null>(null)
+  const [specs, setSpecs] = useState<SpecSummary[]>([])
+  const [features, setFeatures] = useState<FeatureSummary[]>([])
+  const [tasks, setTasks] = useState<TaskSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -77,11 +155,21 @@ export default function ProjectOverviewPage() {
     async function fetchProject() {
       try {
         setError(null)
-        const data = await apiClientAuth<BackendProject | { data: BackendProject }>(`/projects/${projectId}`)
+        const [projectData, specData, featureData, taskData] = await Promise.all([
+          apiClientAuth<BackendProject | { data: BackendProject }>(`/projects/${projectId}`),
+          apiClientAuth<SpecSummary[]>(`/projects/${projectId}/specs`),
+          apiClientAuth<FeatureSummary[]>(`/projects/${projectId}/features`),
+          apiClientAuth<TaskSummary[]>(`/projects/${projectId}/tasks`),
+        ])
+
+        const data = projectData
         const proj = "data" in data && data.data && typeof data.data === "object" && "id" in data.data
           ? data.data
           : data as BackendProject
         setProject(proj)
+        setSpecs(specData)
+        setFeatures(featureData)
+        setTasks(taskData)
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load project")
       } finally {
@@ -106,6 +194,29 @@ export default function ProjectOverviewPage() {
   }
 
   const statusInfo = STATUS_DISPLAY[project.status] ?? STATUS_DISPLAY.active
+  const completedTasks = tasks.filter((task) => DONE_TASK_STATUSES.has(task.status)).length
+  const inProgressTasks = tasks.filter((task) => IN_PROGRESS_TASK_STATUSES.has(task.status)).length
+  const remainingTasks = Math.max(tasks.length - completedTasks - inProgressTasks, 0)
+  const progressPercent = tasks.length > 0 ? Math.round((completedTasks / tasks.length) * 100) : 0
+  const recentActivity = buildRecentActivity(project, specs, features, tasks)
+  const stats = [
+    { label: "Specs", value: specs.length, icon: FileText, color: "text-blue-600", bg: "bg-blue-50", href: "specs" },
+    { label: "Features", value: features.length, icon: Layers, color: "text-violet-600", bg: "bg-violet-50", href: "features" },
+    { label: "Tasks", value: tasks.length, icon: ListChecks, color: "text-emerald-600", bg: "bg-emerald-50", href: "tasks" },
+    { label: "Agents", value: tasks.filter((task) => task.agent_run_id).length, icon: Bot, color: "text-pink-600", bg: "bg-pink-50", href: "agents" },
+  ]
+
+  const velocityDays = Array.from({ length: 7 }, (_, offset) => {
+    const date = new Date()
+    date.setDate(date.getDate() - (6 - offset))
+    const key = date.toISOString().slice(0, 10)
+    const count = tasks.filter((task) => task.updated_at.slice(0, 10) === key).length
+    return {
+      label: date.toLocaleDateString("en-US", { weekday: "short" }),
+      count,
+    }
+  })
+  const maxVelocity = Math.max(...velocityDays.map((day) => day.count), 1)
 
   return (
     <div className="p-6 sm:p-8">
@@ -142,7 +253,7 @@ export default function ProjectOverviewPage() {
 
       {/* Stats cards */}
       <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {STATS.map((stat, i) => {
+        {stats.map((stat, i) => {
           const Icon = stat.icon
           return (
             <motion.div
@@ -204,16 +315,16 @@ export default function ProjectOverviewPage() {
           <div className="mt-4 rounded-xl border border-border bg-white p-5">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-sm font-bold text-navy">Overall Progress</h3>
-              <span className="text-sm font-black text-forest">0%</span>
+              <span className="text-sm font-black text-forest">{progressPercent}%</span>
             </div>
             <div className="mb-4 h-2 w-full overflow-hidden rounded-full bg-cream-dark">
-              <div className="h-full w-0 rounded-full bg-linear-to-r from-forest to-lime" />
+              <div className="h-full rounded-full bg-linear-to-r from-forest to-lime transition-all" style={{ width: `${progressPercent}%` }} />
             </div>
             <div className="grid grid-cols-3 gap-2 text-center">
               {[
-                { label: "Done", value: 0, color: "text-success" },
-                { label: "In Progress", value: 0, color: "text-blue-500" },
-                { label: "Remaining", value: 0, color: "text-muted" },
+                { label: "Done", value: completedTasks, color: "text-success" },
+                { label: "In Progress", value: inProgressTasks, color: "text-blue-500" },
+                { label: "Remaining", value: remainingTasks, color: "text-muted" },
               ].map((s) => (
                 <div key={s.label} className="rounded-lg bg-cream/50 py-2">
                   <div className={cn("text-lg font-black", s.color)}>{s.value}</div>
@@ -239,14 +350,14 @@ export default function ProjectOverviewPage() {
           </div>
 
           <div className="rounded-xl border border-border bg-white">
-            {RECENT_ACTIVITY.map((item, i) => {
+            {recentActivity.map((item, i) => {
               const Icon = item.icon
               return (
                 <div
                   key={i}
                   className={cn(
                     "flex items-start gap-4 px-5 py-4 transition-colors hover:bg-cream/30",
-                    i < RECENT_ACTIVITY.length - 1 && "border-b border-border"
+                    i < recentActivity.length - 1 && "border-b border-border"
                   )}
                 >
                   <div className={cn("mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-cream-dark")}>
@@ -270,23 +381,23 @@ export default function ProjectOverviewPage() {
                 <h3 className="text-sm font-bold text-navy">Task Velocity</h3>
               </div>
               <span className="rounded-full bg-cream-dark px-2 py-0.5 text-[10px] font-semibold text-muted">
-                No data yet
+                Last 7 days
               </span>
             </div>
-            {/* Chart placeholder */}
             <div className="flex h-32 items-end justify-between gap-2">
-              {[10, 10, 10, 10, 10, 10, 10].map((h, i) => (
+              {velocityDays.map((day, i) => (
                 <motion.div
-                  key={i}
+                  key={day.label}
                   initial={{ height: 0 }}
-                  animate={{ height: `${h}%` }}
+                  animate={{ height: `${Math.max((day.count / maxVelocity) * 100, day.count > 0 ? 12 : 6)}%` }}
                   transition={{ duration: 0.5, delay: 0.5 + i * 0.05 }}
-                  className="flex-1 rounded-t-md bg-cream-dark"
+                  className={cn("flex-1 rounded-t-md", day.count > 0 ? "bg-forest/70" : "bg-cream-dark")}
+                  title={`${day.label}: ${day.count} task updates`}
                 />
               ))}
             </div>
             <div className="mt-2 flex justify-between text-[10px] text-muted-light">
-              <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+              {velocityDays.map((day) => <span key={day.label}>{day.label}</span>)}
             </div>
           </div>
         </motion.div>

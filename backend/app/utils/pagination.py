@@ -1,11 +1,10 @@
-"""Pagination helpers for offset-based and cursor-based pagination."""
+"""Pagination helpers for list-like Beanie query results."""
 
 import math
 from dataclasses import dataclass
-from uuid import UUID
+from typing import Generic, Sequence, TypeVar
 
-from sqlalchemy import Select, func, select
-from sqlalchemy.ext.asyncio import AsyncSession
+T = TypeVar("T")
 
 
 @dataclass
@@ -25,7 +24,7 @@ class PaginationParams:
 
 
 @dataclass
-class PaginatedResult[T]:
+class PaginatedResult(Generic[T]):
     """Result container with pagination metadata."""
 
     items: list[T]
@@ -37,8 +36,7 @@ class PaginatedResult[T]:
     def total_pages(self) -> int:
         return math.ceil(self.total / self.per_page) if self.per_page > 0 else 0
 
-    def to_meta(self) -> dict:
-        """Return pagination metadata for API responses."""
+    def to_meta(self) -> dict[str, int]:
         return {
             "page": self.page,
             "per_page": self.per_page,
@@ -47,28 +45,16 @@ class PaginatedResult[T]:
         }
 
 
-async def paginate(
-    db: AsyncSession,
-    query: Select,
-    params: PaginationParams,
-) -> PaginatedResult:
-    """Apply offset-based pagination to a SQLAlchemy select query.
+def paginate_items(items: Sequence[T], params: PaginationParams) -> PaginatedResult[T]:
+    """Paginate an in-memory sequence.
 
-    Executes a count query and the paginated data query.
-    Returns a PaginatedResult with items and metadata.
+    This keeps pagination utilities database-agnostic for the current Beanie
+    stack and still matches the response shape used by the API.
     """
-    # Count total matching rows
-    count_query = select(func.count()).select_from(query.subquery())
-    total_result = await db.execute(count_query)
-    total = total_result.scalar_one()
-
-    # Fetch paginated rows
-    paginated_query = query.offset(params.offset).limit(params.per_page)
-    result = await db.execute(paginated_query)
-    items = list(result.scalars().all())
-
+    total = len(items)
+    paginated = list(items[params.offset : params.offset + params.per_page])
     return PaginatedResult(
-        items=items,
+        items=paginated,
         total=total,
         page=params.page,
         per_page=params.per_page,
@@ -79,7 +65,7 @@ async def paginate(
 class CursorParams:
     """Parameters for cursor-based pagination."""
 
-    cursor: UUID | None = None
+    cursor: str | None = None
     limit: int = 20
 
     def __post_init__(self) -> None:
@@ -87,9 +73,9 @@ class CursorParams:
 
 
 @dataclass
-class CursorResult[T]:
+class CursorResult(Generic[T]):
     """Result container for cursor-based pagination."""
 
     items: list[T]
-    next_cursor: UUID | None
+    next_cursor: str | None
     has_more: bool

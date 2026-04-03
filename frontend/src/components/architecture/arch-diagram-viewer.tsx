@@ -22,7 +22,7 @@ const NODES: ArchNode[] = [
   { id: "auth", label: "Auth Service", sublabel: "JWT + OAuth 2.0", icon: Shield, color: "text-violet-600", bg: "bg-violet-50 border-violet-200", x: 85, y: 10, connections: [] },
   { id: "ai-svc", label: "AI Engine", sublabel: "Claude + Instructor", icon: Cpu, color: "text-amber-600", bg: "bg-amber-50 border-amber-200", x: 50, y: 50, connections: ["queue"] },
   { id: "queue", label: "Celery Workers", sublabel: "Redis Broker", icon: Layers, color: "text-pink-600", bg: "bg-pink-50 border-pink-200", x: 85, y: 50, connections: [] },
-  { id: "db", label: "PostgreSQL", sublabel: "Primary Database", icon: Database, color: "text-sky-600", bg: "bg-sky-50 border-sky-200", x: 25, y: 80, connections: [] },
+  { id: "db", label: "MongoDB Atlas", sublabel: "Primary Document Store", icon: Database, color: "text-sky-600", bg: "bg-sky-50 border-sky-200", x: 25, y: 80, connections: [] },
   { id: "cache", label: "Redis", sublabel: "Cache + Pub/Sub", icon: Wifi, color: "text-red-500", bg: "bg-red-50 border-red-200", x: 60, y: 80, connections: [] },
   { id: "storage", label: "S3 / R2", sublabel: "File Storage", icon: Cloud, color: "text-teal-600", bg: "bg-teal-50 border-teal-200", x: 85, y: 82, connections: [] },
 ]

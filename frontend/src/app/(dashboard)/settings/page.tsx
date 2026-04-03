@@ -1,26 +1,89 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { motion } from "framer-motion"
-import { User, Bell, Key, Globe, Shield, Save, Loader2, Check, GitBranch, Bot, Eye, EyeOff } from "lucide-react"
+import { User, Bell, Key, Globe, Save, Loader2, Check, GitBranch, Bot } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { apiClientAuth } from "@/lib/api-client"
 import { useToastStore } from "@/stores/toast-store"
 
+type UserProfile = {
+  id: string
+  email: string
+  name: string
+  avatar_url: string | null
+  plan: string
+}
+
 export default function SettingsPage() {
+  const addToast = useToastStore.getState().addToast
+  const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
-  const [name, setName] = useState("Ranjit Rajput")
-  const [email] = useState("ranjit@planforge.ai")
-  const [showApiKey, setShowApiKey] = useState(false)
+  const [profile, setProfile] = useState<UserProfile | null>(null)
+  const [name, setName] = useState("")
   const [notifications, setNotifications] = useState({ email: true, browser: true, agentComplete: true, weeklyDigest: false })
 
+  useEffect(() => {
+    async function loadProfile() {
+      try {
+        const user = await apiClientAuth<UserProfile>("/users/me")
+        setProfile(user)
+        setName(user.name)
+      } catch (error) {
+        addToast(error instanceof Error ? error.message : "Failed to load profile", "error")
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadProfile()
+  }, [addToast])
+
   const handleSave = async () => {
+    if (!profile) return
+
     setSaving(true)
-    await new Promise((r) => setTimeout(r, 800))
-    setSaving(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
+    try {
+      const updated = await apiClientAuth<UserProfile>("/users/me", {
+        method: "PATCH",
+        body: JSON.stringify({ name }),
+      })
+      setProfile(updated)
+      setName(updated.name)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch (error) {
+      addToast(error instanceof Error ? error.message : "Failed to save settings", "error")
+    } finally {
+      setSaving(false)
+    }
   }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-16">
+        <Loader2 className="h-6 w-6 animate-spin text-muted" />
+      </div>
+    )
+  }
+
+  if (!profile) {
+    return (
+      <div className="p-6 sm:p-8">
+        <div className="rounded-xl border border-danger/20 bg-danger/5 p-6 text-center">
+          <p className="text-sm font-medium text-danger">We couldn&apos;t load your account settings.</p>
+        </div>
+      </div>
+    )
+  }
+
+  const initials = profile.name
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase()
 
   return (
     <div className="p-6 sm:p-8">
@@ -35,8 +98,10 @@ export default function SettingsPage() {
           <h3 className="mb-4 flex items-center gap-2 text-sm font-bold text-navy"><User className="h-4 w-4 text-forest" /> Profile</h3>
           <div className="space-y-4 rounded-xl border border-border bg-white p-6">
             <div className="flex items-center gap-4">
-              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-forest text-lg font-bold text-white">RR</div>
-              <button onClick={() => useToastStore.getState().addToast("Avatar upload coming soon", "info")} className="rounded-lg border border-border px-3 py-2 text-xs font-medium text-navy hover:bg-cream transition-colors cursor-pointer">Change Avatar</button>
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-forest text-lg font-bold text-white">{initials}</div>
+              <div className="rounded-lg border border-border bg-cream/40 px-3 py-2 text-xs text-muted">
+                Avatar uploads are not enabled yet.
+              </div>
             </div>
             <div>
               <label className="mb-1.5 block text-xs font-semibold text-navy">Full Name</label>
@@ -44,7 +109,7 @@ export default function SettingsPage() {
             </div>
             <div>
               <label className="mb-1.5 block text-xs font-semibold text-navy">Email</label>
-              <input type="email" value={email} disabled className="w-full rounded-lg border border-border bg-cream/50 px-4 py-2.5 text-sm text-muted" />
+              <input type="email" value={profile.email} disabled className="w-full rounded-lg border border-border bg-cream/50 px-4 py-2.5 text-sm text-muted" />
               <p className="mt-1 text-[11px] text-muted-light">Contact support to change your email.</p>
             </div>
           </div>
@@ -78,17 +143,14 @@ export default function SettingsPage() {
 
         {/* API Keys */}
         <section>
-          <h3 className="mb-4 flex items-center gap-2 text-sm font-bold text-navy"><Key className="h-4 w-4 text-forest" /> API Keys</h3>
+          <h3 className="mb-4 flex items-center gap-2 text-sm font-bold text-navy"><Key className="h-4 w-4 text-forest" /> API Access</h3>
           <div className="rounded-xl border border-border bg-white p-6">
-            <div className="flex items-center gap-3">
-              <div className="flex-1 rounded-lg border border-border bg-cream/50 px-4 py-2.5 font-mono text-sm text-muted">
-                {showApiKey ? "pf_live_a1b2c3d4e5f6g7h8i9j0k1l2m3n4" : "pf_live_••••••••••••••••••••••••"}
-              </div>
-              <button onClick={() => setShowApiKey(!showApiKey)} className="flex h-9 w-9 items-center justify-center rounded-lg border border-border text-muted hover:text-navy transition-colors cursor-pointer">
-                {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
+            <div className="rounded-lg border border-border bg-cream/40 p-4">
+              <div className="text-sm font-semibold text-navy">Personal API keys are not provisioned yet</div>
+              <p className="mt-1 text-xs text-muted">
+                This workspace currently authenticates through your signed-in session. If you are demoing the product, avoid promising self-serve API key management until the backend key issuance flow is shipped.
+              </p>
             </div>
-            <button onClick={() => { if (confirm("Are you sure you want to regenerate your API key? The current key will be invalidated.")) { useToastStore.getState().addToast("New API key generated successfully. (This is a placeholder — backend integration pending.)", "success") } }} className="mt-3 text-xs font-medium text-forest hover:text-forest-light transition-colors cursor-pointer">Regenerate API Key</button>
           </div>
         </section>
 
@@ -97,10 +159,10 @@ export default function SettingsPage() {
           <h3 className="mb-4 flex items-center gap-2 text-sm font-bold text-navy"><Globe className="h-4 w-4 text-forest" /> Integrations</h3>
           <div className="space-y-3">
             {[
-              { name: "GitHub", icon: GitBranch, connected: true, desc: "Connected as @ranjitrajput" },
-              { name: "Claude Code", icon: Bot, connected: true, desc: "API key configured" },
-              { name: "Cursor", icon: Bot, connected: false, desc: "Not connected" },
-              { name: "Slack", icon: Bell, connected: false, desc: "Not connected" },
+              { name: "GitHub", icon: GitBranch, connected: true, desc: "Repository connection is configured per project." },
+              { name: "Anthropic / Codex", icon: Bot, connected: true, desc: "LLM access is available through the backend." },
+              { name: "Cursor", icon: Bot, connected: false, desc: "Agent handoff UI is planned, but not yet connected." },
+              { name: "Slack", icon: Bell, connected: false, desc: "Notification delivery is not enabled yet." },
             ].map((item) => {
               const Icon = item.icon
               return (
@@ -112,11 +174,9 @@ export default function SettingsPage() {
                       <div className="text-[11px] text-muted">{item.desc}</div>
                     </div>
                   </div>
-                  <button
-                    onClick={() => { if (!item.connected) { useToastStore.getState().addToast(`${item.name} integration coming soon`, "info") } }}
-                    className={cn("rounded-lg px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer", item.connected ? "border border-success/30 text-success hover:bg-success-light/30" : "border border-border text-navy hover:bg-cream")}>
-                    {item.connected ? "Connected" : "Connect"}
-                  </button>
+                  <div className={cn("rounded-lg px-3 py-1.5 text-xs font-medium", item.connected ? "border border-success/30 text-success bg-success-light/30" : "border border-border text-muted bg-cream/40")}>
+                    {item.connected ? "Available" : "Roadmap"}
+                  </div>
                 </div>
               )
             })}
